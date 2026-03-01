@@ -81,14 +81,14 @@
                     <div class="tree-item " >
                         <a href="chapter5.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                            <span class="tree-title">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）</span>
                         </a>
                     </div>
                 
                     <div class="tree-item " >
                         <a href="chapter6.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                            <span class="tree-title">第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</span>
                         </a>
                     </div>
                 
@@ -102,7 +102,7 @@
                     <div class="tree-item " >
                         <a href="chapter8.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</span>
                         </a>
                     </div>
                 
@@ -116,7 +116,7 @@
                     <div class="tree-item " >
                         <a href="chapter10.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）</span>
                         </a>
                     </div>
                 
@@ -130,7 +130,7 @@
                     <div class="tree-item " >
                         <a href="chapter12.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（把问题拆成「token × 吞吐 × 数值」三条线）</span>
                         </a>
                     </div>
                 
@@ -279,7 +279,7 @@ $$K = \lceil \frac{N}{M} \rceil$$</p>
 <div class="codehilite"><pre><span></span><code>[ 云端 HuggingFace Hub / S3 ]
           │ (多线程并发下载)
           ▼
-[ 本地缓存 NANOCHAT_BASE_DIR/data/fineweb-edu/ ]
+[ 本地缓存 NANOCHAT_BASE_DIR/base_data/ ]
   ├── shard_00000.parquet  ─┐
   ├── shard_00001.parquet   │
   ├── shard_00002.parquet   │ 训练集 (Train Split)
@@ -303,12 +303,19 @@ $$K = \lceil \frac{N}{M} \rceil$$</p>
 <h2 id="33">3.3 本地缓存与下载约定</h2>
 <p>在分布式训练或频繁的实验迭代中，重复从公网下载数据是不可接受的。nanochat 遵循“按需下载，本地绝对缓存”的强约定。</p>
 <p>所有下载的预训练数据、Tokenizer 模型文件以及评估用的基准数据集，都会默认存放在 <code>~/.cache/nanochat</code> 目录下。这个行为由核心模块 <code>nanochat/common.py</code> 控制。</p>
+<p><strong>源码细节：按需下载的“最小但靠谱”实现</strong></p>
+<p><code>nanochat/dataset.py</code> 把预训练语料视为一组按序编号的 Parquet 分片：文件名形如 <code>shard_00000.parquet</code>，并通过 <code>index -&gt; filename</code> 的纯函数映射来定位。下载逻辑有几个很工程化的小设计，特别适合写进你自己的数据管道复用：</p>
+<ol>
+<li><strong>存在即跳过</strong>：如果本地已经有对应 shard，就不会重复下载。</li>
+<li><strong>先写临时文件再原子替换</strong>：下载先落到 <code>.tmp</code>，完整写完再 <code>rename</code> 成正式文件，避免中途中断留下“半个 parquet”污染后续训练。</li>
+<li><strong>指数退避重试</strong>：网络抖动或短暂的 5xx 不会直接让整条训练链路失败。</li>
+</ol>
 <h3 id="331-nanochat_base_dir">3.3.1 环境变量 <code>NANOCHAT_BASE_DIR</code></h3>
 <p>你可以通过设置环境变量 <code>NANOCHAT_BASE_DIR</code> 来无缝覆盖这个默认路径。这在实际的集群环境中是必须的操作。</p>
 <p>例如，在你的登录节点上，<code>~/.cache</code> 通常位于容量极小且 I/O 极慢的网络挂载盘（NFS）上。如果你直接在这里解压数百 GB 的 Parquet 文件，不仅会耗尽配额，还会拖垮整个集群的文件系统。正确的做法是在启动脚本中将其指向本地的高速 NVMe 固态硬盘或并行文件系统（如 Lustre 或 GPFS）：</p>
 <p>例如：在 <code>runs/speedrun.sh</code> 或你的终端中设置环境变量，形如 <code>export NANOCHAT_BASE_DIR=/mnt/nvme_storage/my_username/nanochat_cache</code>。</p>
 <h3 id="332-symlink">3.3.2 避免符号链接（Symlink）地狱</h3>
-<p>如果你直接使用 HuggingFace 的 <code>datasets</code> 库，它默认会在缓存目录中创建复杂的符号链接和基于哈希值的目录结构。为了保证“最小可读、最小可改”，nanochat 的数据准备脚本（如 <code>dev/repackage_data_reference.py</code>）通常会将数据显式地重新打包并复制到结构清晰的 <code>NANOCHAT_BASE_DIR/data/</code> 目录下，彻底摆脱对隐藏缓存机制的依赖。你所见即所得，所有的 <code>.parquet</code> 文件都平铺在明确的目录下。</p>
+<p>如果你直接使用 HuggingFace 的 <code>datasets</code> 库，它默认会在缓存目录中创建复杂的符号链接和基于哈希值的目录结构。nanochat 的选择更“朴素但可控”：预训练 shards 直接平铺在 <code>NANOCHAT_BASE_DIR/base_data/</code> 下，训练时从这个目录流式读取，不依赖 HF datasets 的隐藏缓存结构。你所见即所得：目录里有多少个 <code>.parquet</code>，训练就能读到多少个分片。</p>
 <hr />
 <h2 id="34-trainval-split">3.4 训练集与验证集的划分（Train/Val Split）</h2>
 <p>在机器学习中，我们必须保留一部分模型绝对没有见过的数据来评估其泛化能力（计算 Validation Loss 或 BPB）。在 nanochat 中，预训练数据的切分采用的是<strong>分片级别的物理隔离（Shard-level Physical Isolation）</strong>，而不是在运行时对所有数据进行随机采样切分。</p>

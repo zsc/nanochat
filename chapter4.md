@@ -73,19 +73,30 @@ Token IDs: [15496, 11, 4521, 8932, 0, 843, 67]
 
 ### 4.2.2 特殊 Token 的设计与隔离：控制面与数据面的分离
 
-在预训练的后期以及监督微调（SFT）和强化学习（RL）阶段，我们需要向模型传递大量的**结构化控制信号**。例如：
-*   `<|endoftext|>`：宣告一篇预训练文档的彻底结束，防止模型将两篇无关文档的上下文强行关联。
-*   `<|im_start|>` 和 `<|im_end|>`：在 ChatML 格式中，用于精确标记用户（User）、助手（Assistant）或系统（System）发言的起始与终止。
-*   `<|tool_call|>`：触发外部工具调用的硬性指令。
+在预训练的后期以及监督微调（SFT）和强化学习（RL）阶段，我们需要向模型传递大量的**结构化控制信号**。nanochat 把这些控制信号全部做成一小组“特殊 token”，集中定义在 `nanochat/tokenizer.py` 的 `SPECIAL_TOKENS`，默认包括：
 
-这些被称为**特殊 Token（Special Tokens）**。在计算机网络的术语中，普通文本构成了“数据面（Data Plane）”，而特殊 Token 构成了“控制面（Control Plane）”。这两者必须被绝对隔离。
+*   `<|bos|>`：文档/对话行的起始分隔符（同时也被用作若干场景的 padding/终止信号）
+*   `<|user_start|>` / `<|user_end|>`：用户消息边界
+*   `<|assistant_start|>` / `<|assistant_end|>`：助手消息边界（`<|assistant_end|>` 也是推理时常用的停止 token）
+*   `<|python_start|>` / `<|python_end|>`：助手触发“计算器工具”的代码块边界
+*   `<|output_start|>` / `<|output_end|>`：工具返回结果的边界（通常不希望把这段输出当作监督信号）
 
-如果特殊 Token 的处理机制与普通文本相同，灾难就会降临。假设用户在聊天输入框中恶意输入了 `<|im_end|>` 字符串，如果 Tokenizer 只是盲目地将其当作普通文本进行 BPE 编码，或者更糟的是，将其识别为了控制信号，那么模型就会误以为用户的发言已经结束，甚至被诱导执行非预期的指令（这被称为 Prompt Injection 攻击）。
+在术语上，你可以把普通文本视为“数据面（Data Plane）”，把特殊 token 视为“控制面（Control Plane）”。区别在于：数据面来自外部语料与用户输入，控制面来自你对训练/推理协议的设计。两者必须保持清晰的工程边界，否则数据准备与推理服务会被“格式注入”与“格式漂移”反复折磨。
 
-在 nanochat 的实现中，特殊 Token 享有最高的解析优先级，且被**硬编码隔离**。当 Tokenizer 扫描输入字符串时，它会首先使用一个高效的字典树（Trie）或精确匹配算法，将所有注册过的特殊 Token 完整地提取出来，并直接赋予它们预留的特殊词表 ID（通常位于词表的末尾，例如 ID 100256 到 100270）。只有在剔除了这些特殊 Token 之后，剩余的纯文本才会被送入前文所述的正则预切分和 BPE 合并流水线。
+一个容易踩坑的历史遗留是：很多开源模型（尤其是 GPT-2 系列）把文档分隔符叫作 `<|endoftext|>`。nanochat 为了减少歧义，在自训 tokenizer 中统一使用 `<|bos|>`，但在加载外部 tokenizer 时会把 `<|endoftext|>` 当作 BOS 来兼容（这也是为什么你会在代码里看到对两者的并存讨论）。
 
-**Rule-of-Thumb（经验法则）**：
-在处理 SFT 数据集时，必须确保你的数据加载器（DataLoader）在调用 Tokenizer 时，明确禁用了将普通文本解析为特殊 Token 的功能（通常通过 `allowed_special=set()` 参数控制）。特殊 Token 只能由你的代码逻辑显式地拼接进去，绝不能由用户的输入文本隐式触发。
+**实现细节：两条编码路径**
+
+nanochat 没有“让 tokenizer 在普通文本里自动识别并注入 special token”的魔法开关，而是刻意把编码分成两条路径：
+
+*   **普通文本**：走 `encode(...)`（RustBPETokenizer 内部使用的是 tiktoken 的普通文本编码路径），把一切输入当作字节序列来编码。
+*   **特殊 token**：只能通过 `encode_special("<|assistant_end|>")` 这种“精确匹配”拿到 token id，或在 API 上用 `prepend=` 等参数显式插入。
+
+这带来两个实际收益：
+1. **格式更稳定**：控制 token 不会被正则切分或 BPE 合并“误伤”，也不会被语料统计改写语义边界。
+2. **默认更安全**：外部输入（尤其是 WebUI 的用户内容）通常不会被“解释成控制信号”，降低用户在文本里夹带形如 `<|...|>` 的字符串导致协议错乱的风险。
+
+**有意思的小细节（与后续章节强相关）**：在默认 `vocab_size=32768` 的 RustBPE tokenizer 下，special tokens 会被放在词表尾部的一小段连续 id 中（数量等于 `SPECIAL_TOKENS` 的长度）。这让你在排查“模型为什么突然输出一堆控制符”时，可以用一个很简单的经验：**如果某个 token id 非常接近词表上界，先怀疑它是 special token，而不是自然语言子串**。
 
 ### 4.2.3 压缩率 (Compression Ratio)：模型视野的放大器
 
@@ -137,7 +148,7 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 
 *   **GPT-4 风格 Byte-Level BPE**：通过将文本降维至 256 个基础 UTF-8 字节，彻底消除了 OOV（未登录词）问题。
 *   **正则预切分（Split Pattern）**：在 BPE 合并前强制划定逻辑边界（如分离标点、限制数字连续长度），防止跨语义的“脏合并”，提升模型的泛化与数学能力。
-*   **特殊 Token 的隔离**：控制面（如 `<|im_start|>`）必须与数据面（普通文本）严格隔离。特殊 Token 享有最高解析优先级，不参与正则切分与 BPE 合并，防止 Prompt Injection 与格式崩溃。
+*   **特殊 token 体系**：nanochat 用 `<|bos|>`、`<|user_start|>`/`<|user_end|>`、`<|assistant_start|>`/`<|assistant_end|>`、`<|python_start|>`/`<|python_end|>`、`<|output_start|>`/`<|output_end|>` 显式编码对话与工具边界；特殊 token 应由渲染器/上层逻辑显式插入，而不是让外部文本“碰巧触发”。
 *   **压缩率 ($CR$)**：定义为 $CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}}$。高压缩率能成倍放大模型的有效上下文窗口，但过大的词表会导致长尾 Token 训练不充分及显存暴涨。
 *   **BPB (Bits Per Byte)**：跨 Tokenizer 比较模型能力的“度量衡”。通过消除词表大小带来的预测难度差异，真实反映模型的信息压缩极限。计算公式为 $BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}}}$。
 
@@ -223,13 +234,13 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 
 *   **陷阱 1：词表大小未对齐导致吞吐暴跌**
     *   **现象**：模型训练速度异常缓慢，GPU 利用率波动大，且 `nvidia-smi` 显示的算力利用率远低于预期。
-    *   **原因**：添加特殊 Token 后，词表大小（如 32003）不是 64 或 128 的整数倍，导致矩阵乘法无法高效利用 Tensor Cores。
-    *   **Rule-of-Thumb**：在构建模型配置时，永远编写一段防御性代码，将最终的 `vocab_size` 向上取整到 64 的倍数（例如 `vocab_size = (vocab_size + 63) // 64 * 64`）。
+    *   **原因**：如果 Embedding/LM Head 的词表维度没有按硬件友好的粒度对齐（常见是 64 的倍数），某些矩阵乘法会更难跑满 Tensor Cores。nanochat 的 `GPT` 会自动把词表向上 padding 到 64 的倍数，并在前向里把 logits 切回真实 `vocab_size`，以兼顾吞吐与数值语义；但如果你自己改动了这段逻辑，就要重新关注对齐问题。
+    *   **Rule-of-Thumb**：当你观察到“算子没跑满”且瓶颈落在 Embedding/LM Head 的 GEMM 上时，优先检查词表维度是否被 padding 到 64 的倍数，以及 logits 是否在输出侧正确裁剪回真实词表。
 
 *   **陷阱 2：特殊 Token 泄漏（Prompt Injection）**
-    *   **现象**：在 SFT 训练后，模型在与用户对话时突然提前停止生成，或者输出了内部的控制字符（如 `<|im_end|>`）。
-    *   **原因**：数据准备阶段，没有在 Tokenizer 调用中禁用特殊 Token 解析。用户输入中包含的恶意控制字符串被 Tokenizer 识别成了真实的控制信号。
-    *   **Rule-of-Thumb**：在处理任何外部不可信文本时，调用 `tokenizer.encode(text, allowed_special=set())`。确保控制信号只能由系统代码通过字符串拼接或直接插入 ID 的方式加入。
+    *   **现象**：在 SFT 训练后，模型在与用户对话时突然提前停止生成，或者输出了内部的控制字符（如 `<|assistant_end|>`），导致上层状态机误判“该结束了”。
+    *   **原因**：最常见的根因不是 tokenizer 的数学问题，而是**协议边界被上层逻辑打破**：你把外部输入当成“已经渲染好的对话片段”，直接拼进上下文（或允许用户把控制串混入系统 prompt），导致模型在控制面上看到意外的 token 模式。
+    *   **Rule-of-Thumb**：对外部不可信输入只做“普通文本编码”，特殊 token 一律由系统显式插入；如果你的应用场景允许用户粘贴包含 `<|...|>` 的文本，建议在 UI/服务端对这类模式做转义或告警。
 
 *   **陷阱 3：BPB 计算使用了错误的“字节数”**
     *   **现象**：计算出的 BPB 异常低（例如小于 0.5），或者在不同数据集上的 BPB 波动极大，无法解释。
@@ -243,8 +254,8 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 
 *   **陷阱 5：SFT 数据打包（Packing）时丢失 EOS Token**
     *   **现象**：模型在对话推理时变成了“话痨”，永远不会主动停止生成，直到达到最大长度限制。
-    *   **原因**：在将多条短对话拼接（Packing）成一条长序列以提升训练效率时，忘记在每条对话的末尾手动追加 `<|im_end|>` 或 `<|endoftext|>` Token。模型在训练中从未学过“何时该闭嘴”。
-    *   **Rule-of-Thumb**：在构建 SFT DataLoader 时，仔细检查拼接逻辑。打印出前 3 个 Batch 的解码文本，肉眼确认每段逻辑对话的末尾是否都明确存在终止 Token。
+    *   **原因**：在 nanochat 的对话协议中，`<|assistant_end|>` 是最关键的“轮次闭合”标记（Engine 也常用它作为停止条件）。如果你的数据准备在截断/拼接时把 `<|assistant_end|>` 丢了，或者把它错误地当作 padding/无效 token 掩码掉，模型就学不会在正确的时机生成结束信号。
+    *   **Rule-of-Thumb**：检查每条训练对话在逻辑上是否“闭合”：每个 assistant 回复都必须以 `<|assistant_end|>` 收尾；如果你引入了工具输出（`<|output_start|>...<|output_end|>`），还要确认工具输出段不会被模型当作必须预测的“金标准”（详见第 10 章的强制注入机制）。
 
 *   **陷阱 6：前导空格（Prefix Space）处理不一致**
     *   **现象**：模型在续写文本时，生成的第一个单词总是和前面的单词粘连在一起（例如 `helloworld`），或者在不该有空格的地方强行换行。

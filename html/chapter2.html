@@ -81,14 +81,14 @@
                     <div class="tree-item " >
                         <a href="chapter5.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                            <span class="tree-title">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）</span>
                         </a>
                     </div>
                 
                     <div class="tree-item " >
                         <a href="chapter6.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                            <span class="tree-title">第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</span>
                         </a>
                     </div>
                 
@@ -102,7 +102,7 @@
                     <div class="tree-item " >
                         <a href="chapter8.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</span>
                         </a>
                     </div>
                 
@@ -116,7 +116,7 @@
                     <div class="tree-item " >
                         <a href="chapter10.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）</span>
                         </a>
                     </div>
                 
@@ -130,7 +130,7 @@
                     <div class="tree-item " >
                         <a href="chapter12.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（把问题拆成「token × 吞吐 × 数值」三条线）</span>
                         </a>
                     </div>
                 
@@ -224,28 +224,18 @@
 <p>为此，nanochat 采用了一种不可妥协的“强约定”集中式管理策略。所有的工程产物都会被统一收束到一个基础目录（Base Directory）中。</p>
 <p><strong>经验法则（Rule-of-thumb）：</strong>
 <strong>永远不要在代码仓库所在的系统分区上进行训练。务必通过设置环境变量 <code>NANOCHAT_BASE_DIR</code>，将基础目录重定向到拥有大容量（至少 TB 级别）和高吞吐（NVMe SSD）的独立数据盘挂载点。</strong></p>
-<p>在这个基础目录下，nanochat 维护着一个严格且自解释的层级结构。你可以将其想象为一个高度组织化的现代化仓库，每个区域都有明确的职责：</p>
-<div class="codehilite"><pre><span></span><code>[NANOCHAT_BASE_DIR] (例如: /mnt/nvme_data/nanochat_cache/)
- ├── data/                     &lt;-- 数据集缓存区 (不可变数据)
- │    ├── fineweb-edu/         &lt;-- 预训练语料分片 (Parquet)
- │    ├── gsm8k/               &lt;-- 强化学习/评测数据集
- │    └── ...
- ├── tokenizers/               &lt;-- 词表与分词器产物区
- │    ├── nanochat_bpe_v1/     &lt;-- 包含 vocab.json, merges.txt
- │    └── ...
- ├── runs/                     &lt;-- 实验专属隔离区 (动态产物)
- │    ├── speedrun_d12_v1/     &lt;-- 某次具体实验的专属目录
- │    │    ├── checkpoints/    &lt;-- 权重与优化器状态 (ckpt_001000.pt, ckpt_002000.pt...)
- │    │    ├── report.jsonl    &lt;-- 本地结构化指标日志 (事实的唯一来源)
- │    │    └── config.yaml     &lt;-- 锁定该次实验的所有超参数与环境变量
- │    ├── speedrun_d24_v2/
- │    └── ...
- └── evals/                    &lt;-- 离线评测结果归档区
-      ├── core_eval_results/
-      └── chat_eval_results/
+<p>在这个基础目录下，nanochat 维护着一个简单但很“可查证”的层级结构。为了避免文档与代码产生错位，这里直接按仓库实现（<code>nanochat/common.py</code>、<code>nanochat/dataset.py</code>、<code>nanochat/checkpoint_manager.py</code>、<code>nanochat/report.py</code>）给出真实的目录形态：</p>
+<div class="codehilite"><pre><span></span><code>[NANOCHAT_BASE_DIR] (默认: ~/.cache/nanochat/)
+ ├── base_data/                 &lt;-- 预训练语料 Parquet shards（按需下载）
+ ├── tokenizer/                 &lt;-- tokenizer.pkl + token_bytes.pt
+ ├── base_checkpoints/          &lt;-- Base 预训练 checkpoints（按 model-tag 分目录）
+ ├── chatsft_checkpoints/       &lt;-- Chat SFT checkpoints
+ ├── chatrl_checkpoints/        &lt;-- Chat RL checkpoints（实验性）
+ ├── eval_bundle/               &lt;-- CORE 评测包（首次评测自动下载/解压）
+ └── report/                    &lt;-- 训练报告分节 .md + 最终 report.md
 </code></pre></div>
 
-<p>这种设计的精妙之处在于<strong>状态的隔离与不可变性（Immutability）</strong>。<code>data/</code> 和 <code>tokenizers/</code> 目录下的内容一旦生成或下载，就应当被视为只读的公共基础设施，供所有实验共享，从而极大地节省了存储空间和重复处理的时间。而 <code>runs/</code> 目录下的每一个子文件夹，则是一个完全封闭的“沙盒”。一个实验只能向自己的沙盒中写入数据，绝对禁止跨越沙盒修改其他实验的产物。这种物理级别的隔离，是实现可复现性的第一道防线。</p>
+<p>这种设计的精妙之处在于<strong>“共享的基础设施”与“可变的实验状态”分离</strong>：<code>base_data/</code> 与 <code>tokenizer/</code> 通常是跨实验复用的（相对不可变），而三类 checkpoints 目录则是典型的“可变状态”。其中每个 <code>model-tag</code> 对应一个子目录，目录内用 <code>model_000010.pt</code>、<code>meta_000010.json</code>、<code>optim_000010_rank3.pt</code> 这类文件名承载“这一步的模型/元数据/分 rank 优化器分片”。这让你在排查“到底加载了哪个 checkpoint”时，不需要猜测任何隐式约定：文件名本身就是证据链的一部分。</p>
 <h3 id="222-ddp">2.2.2 单机多卡的协同与分工：分布式数据并行（DDP）的数学与工程本质</h3>
 <p>现代语言模型的参数量动辄数十亿，单张加速卡（GPU）的显存（如 80GB 的 A100）甚至无法装下模型本身及其优化器状态，更遑论进行大批量的矩阵运算。因此，分布式训练成为了必选项。在 nanochat 的最小可复现链路中，我们聚焦于最基础但也最核心的分布式架构：<strong>单机多卡环境下的分布式数据并行（Distributed Data Parallel, 简称 DDP）</strong>。</p>
 <p>理解 DDP 的前提，是明确几个核心的拓扑概念：</p>
@@ -282,21 +272,19 @@ GPU 2 (持有 g_global)    GPU 3 (持有 g_global)
 <h3 id="223">2.2.3 实验记录：本地报告与云端看板的解耦与防御性设计</h3>
 <p>“我上周跑的那个实验，在第 5000 步时的学习率是多少？验证集损失降到了多少？”这是模型训练中最常见的追问。为了回答这个问题，我们需要一个健壮的指标记录系统。</p>
 <p>许多初学者过度依赖于第三方的云端可视化看板（如 Weights &amp; Biases, TensorBoard.dev 等）。这些工具确实能提供极佳的交互式图表体验，但它们存在一个致命的工程缺陷：<strong>脆弱性</strong>。云端服务强依赖于持续稳定的网络连接。在长达数周的训练过程中，机房的网络抖动、DNS 解析失败、代理服务器超时、甚至云端服务商本身的 API 速率限制（Rate Limit）或宕机，都是大概率发生的事件。如果将训练循环（Training Loop）与云端日志强耦合，一旦网络请求阻塞，整个训练进程就会被挂起（Hang），甚至因为超时异常而直接崩溃。这对于耗资巨大的大模型训练来说是不可接受的。</p>
-<p>为了实现极致的抗脆弱性，nanochat 采用了<strong>本地结构化报告（Local Report）与云端看板完全解耦</strong>的设计模式。</p>
-<p>在 nanochat 中，<strong>本地报告是“事实的唯一来源”（Single Source of Truth）</strong>。在每一个日志记录步（Logging Step），Rank 0 进程会将当前的所有关键指标打包成一个 JSON 对象，并以追加（Append-Only）的方式写入到实验专属目录下的 <code>report.jsonl</code> 文件中。JSONL（JSON Lines）格式的优势在于每一行都是一个独立的合法 JSON 对象，即使训练进程在写入一半时被操作系统强行杀死（如 OOM），已经写入的行也不会损坏，且极其容易被后续的数据分析脚本（如 Pandas）解析。</p>
-<p>一个典型的 <code>report.jsonl</code> 行可能包含以下信息：</p>
-<ul>
-<li>绝对时间戳与相对训练时间</li>
-<li>当前的全局步数（Step）与消耗的 Token 总数</li>
-<li>训练损失（Train Loss）与学习率（Learning Rate）</li>
-<li>系统吞吐量（Tokens per second, TPS）与模型算力利用率（Model Flops Utilization, MFU）</li>
-</ul>
+<p>为了实现极致的抗脆弱性，nanochat 采用了<strong>“本地报告 +（可选）wandb”解耦</strong>的模式，但它的本地报告形态与很多人习惯的 JSONL 不同：<code>nanochat/report.py</code> 维护的是一套“分节的 Markdown 实验卡片”。</p>
+<p>更具体地说，nanochat 的 report 系统有三个很实用的源码细节：</p>
+<ol>
+<li><strong>报告不是时间序列，而是阶段卡片</strong>：<code>get_report().log(section, data)</code> 会把某个阶段的关键结果写成一个 <code>.md</code> 文件（例如 tokenizer 训练/评估、base 评估、chat 评估等），用于最终拼装成一份 <code>report.md</code>。它强调“阶段性的可复盘”，而不是逐 step 的细粒度曲线。</li>
+<li><strong>Rank 0 写入</strong>：<code>get_report()</code> 在非 0 号 rank 上会返回一个空操作的 DummyReport，这避免了多进程同时写文件造成的损坏与混乱。</li>
+<li><strong>报告头部自动采集环境证据</strong>：<code>reset</code> 会生成 header，里面包含 git commit/dirty 状态、硬件信息（GPU 型号与显存）、软件版本、以及对仓库“膨胀度”（字符数/行数/文件数/依赖数量）的粗统计。这些信息在复现与对比实验时非常省心。</li>
+</ol>
 <p>系统吞吐量 $TPS$ 的计算公式为：
 $$ TPS = \frac{B_{global} \times T}{\Delta t} $$
 其中 $B_{global}$ 是全局批次大小，$T$ 是序列长度（Sequence Length），$\Delta t$ 是两个记录步之间消耗的真实挂钟时间（Wall-clock time，单位为秒）。</p>
-<p>而云端看板在 nanochat 中被降级为“可选的异步消费者”。云端日志记录器会在后台线程中非阻塞地读取本地指标并尝试发送。即使发送失败，它也只会静默地丢弃或重试，绝不会抛出异常中断主训练循环。</p>
+<p>而 wandb 在 nanochat 中更像“可选的可视化镜子”：训练脚本里如果 <code>--run=dummy</code>（或非 master rank），会用 DummyWandb 直接跳过云端上报；如果你启用真实 run 名称，那么 wandb 会提供你熟悉的曲线与对比，但不应成为训练是否能继续的单点依赖。</p>
 <p><strong>经验法则（Rule-of-thumb）：</strong>
-<strong>评估实验结果或进行论文绘图时，永远以本地生成的 <code>report.jsonl</code> 文件为准。云端看板仅用于训练过程中的实时趋势监控和团队共享。在编写自定义的评估脚本时，也应当优先解析本地的 JSONL 文件。</strong></p>
+<strong>把 <code>NANOCHAT_BASE_DIR/report/</code> 下的 <code>report.md</code> 当成“端到端证据链”的汇总；把 wandb 当成“训练过程中看趋势”的可选工具。两者各司其职，别互相替代。</strong></p>
 <h3 id="224">2.2.4 随机性控制与“宏观可复现性”的边界</h3>
 <p>在深度学习中追求绝对的位级（Bit-level）可复现性是一个极其昂贵且往往不切实际的目标。</p>
 <p>为了尽可能保证实验的可复现性，我们需要在代码的入口处固定所有的随机数生成器种子（Random Seeds），包括 Python 内置的 <code>random</code> 模块、<code>numpy.random</code>、以及 PyTorch 的 CPU 和 GPU 随机种子。</p>
@@ -317,18 +305,18 @@ $$ TPS = \frac{B_{global} \times T}{\Delta t} $$
 <ol>
 <li><strong>不可变的基石与隔离的沙盒</strong>：通过 <code>NANOCHAT_BASE_DIR</code> 建立统一的缓存大本营。严格区分不可变的公共数据（<code>data/</code>, <code>tokenizers/</code>）与动态隔离的实验沙盒（<code>runs/</code>），从物理层面杜绝产物混淆。</li>
 <li><strong>DDP 的数学等价与主节点统筹</strong>：深入理解 DDP 的核心在于反向传播后的 All-Reduce 梯度同步：$g_{global} = \frac{1}{W} \sum_{i=0}^{W-1} g_i$。在多卡协同中，必须严格执行“Rank 0 独裁法则”，仅允许主进程进行磁盘 I/O 和终端输出。</li>
-<li><strong>防御性的日志解耦</strong>：坚持“本地结构化日志（JSONL）为主，云端可视化为辅”的架构。本地报告是事实的唯一来源，确保训练进程具备抵抗恶劣网络环境的极高鲁棒性。</li>
+<li><strong>防御性的日志解耦</strong>：坚持“本地 report（分节 Markdown）为证据链汇总，云端可视化为可选辅助”的架构。这样即使网络不稳定，你依然能拿到一份完整的可复盘报告。</li>
 <li><strong>务实的复现性追求</strong>：通过固定全局与 Worker 种子来消除大部分随机性，但为了保证训练吞吐量，接受底层浮点数原子操作带来的微小非确定性，追求具有工程意义的“宏观可复现性”。</li>
 </ol>
 <h2 id="24">2.4 练习题</h2>
 <h3 id="_1">基础题（帮助熟悉材料）</h3>
 <ol>
-<li><strong>在 nanochat 的目录约定中，为什么要把预训练语料分片（Parquet Shards）和某次具体实验的检查点（Checkpoints）存放在不同的顶级子目录下（<code>data/</code> vs <code>runs/</code>）？</strong>
+<li><strong>在 nanochat 的目录约定中，为什么要把预训练语料分片（Parquet Shards）与 tokenizer 产物放在 <code>base_data/</code> 与 <code>tokenizer/</code>，而把训练权重放在 <code>base_checkpoints/</code> / <code>chatsft_checkpoints/</code> / <code>chatrl_checkpoints/</code>？</strong>
 <em>Hint：思考这两类文件的生命周期、复用频率以及修改权限的差异。</em></li>
 </ol>
 <details>
 <summary>点击查看答案</summary>
-<p>预训练语料分片属于“公共基础设施”，其生命周期贯穿于无数次不同的实验中，且一旦下载和预处理完成，就应当被视为不可变（Immutable）的只读文件，存放在 <code>data/</code> 目录下可以最大化地被各个实验复用，节省存储空间。而检查点是某次具体实验的特有产物，属于动态生成的“私有状态”，存放在 <code>runs/</code> 的专属实验目录下，可以保证实验之间的物理隔离，防止不同实验的权重互相覆盖。</p>
+<p>预训练语料分片与 tokenizer 更接近“公共基础设施”：它们往往会被多次训练复用，一旦下载/训练完成就很少再改动，集中放在 <code>base_data/</code> 与 <code>tokenizer/</code> 能减少重复工作、降低磁盘开销。而 checkpoints 是训练过程的可变状态：它们高度依赖本次 run 的超参数、随机性与训练进度，并且需要按阶段（base/sft/rl）与按模型标签（model-tag）隔离存放，才能避免“加载错模型”或“被新 run 覆盖”的事故。</p>
 </details>
 <ol start="2">
 <li><strong>在一个单机 8 卡的 DDP 训练任务中，如果我们在代码中不加任何限制地写入 <code>torch.save(model.state_dict(), "model.pt")</code>，会发生什么灾难性的后果？</strong>
@@ -347,16 +335,22 @@ $$ TPS = \frac{B_{global} \times T}{\Delta t} $$
 <p>根据公式 $B_{global} = B_{micro} \times W$，已知全局批次大小 $B_{global} = 1024$，显卡总数（World Size）$W = 4$。因此，每张显卡实际处理的微批次大小 $B_{micro} = \frac{1024}{4} = 256$。每张卡每次前向传播处理的 Token 数量为 $256 \times 2048 = 524,288$ 个。</p>
 </details>
 <ol start="4">
-<li><strong>为什么 nanochat 选择 JSONL（JSON Lines）格式而不是标准的单一 JSON 数组格式来记录本地报告？</strong>
-<em>Hint：考虑当训练进程因为 OOM（内存溢出）被操作系统强行 Kill 掉时，文件末尾的状态。</em></li>
+<li><strong>为什么 nanochat 的本地 report 选择“按章节写多个 Markdown 文件，再在最后拼装成 report.md”的方式，而不是把所有指标做成一个逐步追加的单文件时间序列（例如 JSONL）？</strong>
+<em>Hint：区分“训练时的细粒度曲线”与“实验结束后的报告卡片”。想想文件增长、可读性与故障恢复各自的代价。</em></li>
 </ol>
 <details>
 <summary>点击查看答案</summary>
-<p>标准的 JSON 数组格式要求文件必须以 <code>]</code> 结尾才能被正确解析。如果训练进程意外崩溃，文件未能正确闭合，整个 JSON 文件都会变得不合法，导致之前记录的所有数据难以解析。而 JSONL 格式每一行都是一个独立的、合法的 JSON 对象。即使最后一行因为崩溃只写入了一半，解析器也可以轻松地跳过这一行，完整保留崩溃前记录的所有历史数据，极大地提升了日志记录的抗脆弱性。</p>
+<p>在 nanochat 的实现里，本地 report 更像是一份“端到端实验报告卡片”，它关心的是每个阶段的关键产物与最终指标（例如 tokenizer 的训练信息、base 的 CORE/BPB、chat 的各任务准确率），而不是逐 step 的高频曲线。把 report 按“章节”拆成多个 Markdown 文件有几个工程好处：</p>
+<ol>
+<li><strong>可读性强</strong>：每个文件天然对应一个阶段，打开就是结果，不需要先写解析脚本。</li>
+<li><strong>文件不失控增长</strong>：不会因为训练步数变长就无限膨胀为一个巨大日志文件。</li>
+<li><strong>故障恢复简单</strong>：某个阶段没跑完，就缺哪一节；拼装时跳过缺失节即可生成“尽力而为”的报告。</li>
+</ol>
+<p>细粒度的时间序列曲线（Loss、LR、吞吐等）则更适合交给可选的 wandb 去做；如果你确实需要完整的本地时间序列，也可以在训练脚本里额外落盘，但它不属于 nanochat 目前的最小实现范围。</p>
 </details>
 <h3 id="_2">挑战题（包括开放性思考题）</h3>
 <ol start="5">
-<li><strong>【指标计算】在一次训练实验中，你观察到本地 <code>report.jsonl</code> 中记录的参数如下：全局批次大小 $B_{global} = 512$，序列长度 $T = 4096$。日志显示，从第 100 步到第 110 步（共 10 步），总共消耗了真实的挂钟时间 25 秒。请计算这 10 步期间的平均系统吞吐量（Tokens per second, TPS）。</strong>
+<li><strong>【指标计算】在一次训练实验中，你观察到训练日志记录的参数如下：全局批次大小 $B_{global} = 512$，序列长度 $T = 4096$。日志显示，从第 100 步到第 110 步（共 10 步），总共消耗了真实的挂钟时间 25 秒。请计算这 10 步期间的平均系统吞吐量（Tokens per second, TPS）。</strong>
 <em>Hint：先计算这 10 步总共处理了多少个 Token，再除以总时间。公式：$TPS = \frac{\Delta Steps \times B_{global} \times T}{\Delta t}$。</em></li>
 </ol>
 <details>
@@ -418,8 +412,8 @@ $$ TPS = \frac{B_{global} \times T}{\Delta t} $$
 <li>
 <p><strong>实验产物被静默覆盖 (Silent Overwrite of Artifacts)</strong>
    - <strong>症状</strong>：昨天跑了一个基线模型，评估指标非常好（如 BPB 很低）。今天修改了学习率重新跑了一次，结果发现昨天模型的 Checkpoint 文件时间戳变成了今天，且重新评估昨天的模型时，表现极差。
-   - <strong>根本原因</strong>：开展新实验时，忘记在启动命令中修改 <code>--run-name</code> 参数。导致新实验的进程直接覆盖了旧实验专属目录下的 <code>checkpoints/</code> 和 <code>report.jsonl</code>，造成了不可逆的数据丢失。
-   - <strong>调试与修复</strong>：在 nanochat 的工程实践中，应在实验启动的入口处添加防御性断言（Assertion）。如果检测到目标实验目录已存在且包含非空的 <code>report.jsonl</code>，应当抛出致命错误并拒绝启动，除非用户显式传递了 <code>--resume</code> 或 <code>--force-overwrite</code> 标志。</p>
+   - <strong>根本原因</strong>：最常见的是复用了同一个 <code>model-tag</code>（或干脆没传 <code>--model-tag</code>，默认就落到 <code>d{depth}</code> 这类固定目录），导致新 run 继续向同一目录写入并覆盖旧的 <code>model_*.pt</code>/<code>meta_*.json</code>/<code>optim_*</code> 文件。另一个更隐蔽的问题是：<code>report/</code> 目录是全局的，很多端到端脚本会在开始时 <code>reset</code> 它，如果你没有在结束后把 <code>report.md</code> 另存为“这次 run 的归档”，下一次运行就会把报告覆盖掉。
+   - <strong>调试与修复</strong>：为每次实验设置唯一的 <code>--model-tag</code>（base/sft/rl 都一样重要）；训练结束后把生成的 <code>report.md</code> 归档到你自己的实验目录或制品系统；需要断点续训时再显式使用加载 step 的参数，而不是“赌默认会加载到你想要的那个目录”。</p>
 </li>
 <li>
 <p><strong>主内存溢出 (CPU RAM OOM during Dataset Loading)</strong>

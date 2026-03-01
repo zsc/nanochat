@@ -1,266 +1,281 @@
-# 第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）
+# 第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）
 
-在大型语言模型（LLM）的预训练工程中，最让算法工程师和训练人员头疼的往往不是如何写出前向传播与反向传播的代码，而是面对满屏的超参数无从下手：Transformer 的层数设多少？隐藏层维度多大？全局批次大小（Global Batch Size）该怎么配？峰值学习率定在多少合适？预热步数怎么算？训练多少个 Token 才能达到所谓的“计算最优”（Compute-Optimal）？
+预训练阶段最消耗精力的，往往不是“把模型写出来”，而是把一次训练跑成**可比较、可复现、可扩展**的工程实验：你需要让不同规模的实验点在同一套假设下可对齐（数据量、batch、学习率、权重衰减、注意力窗口……），否则你看到的曲线差异很可能只是“某个旋钮顺手改了”的副作用。
 
-如果将这些超参数全部暴露给用户，由于它们之间存在着极其复杂的非线性耦合关系（例如：模型变宽需要更小的学习率；模型变深需要更大的残差缩放；参数量变大需要更多的训练数据和更大的批次大小），盲目调参极易导致梯度爆炸、损失函数不下降（Loss Plateau），或者在不知不觉中造成巨大的算力浪费。
-
-本章将深入解析 nanochat 预训练阶段的核心设计哲学——**单一旋钮控制（Single-Knob Scaling）**。我们将探讨如何仅通过指定模型的“深度”（即 `depth` 参数，代表 Transformer 的层数），让系统在内部建立一套严格的数学映射，自动推导出符合 Scaling Laws（缩放定律）的模型三维形状、数据规模以及优化器配置。
+nanochat 的 `scripts/base_train.py` 选择了一条更接近“配方工程”的路线：把“规模”主要压缩为一个旋钮 `--depth`，其余参数尽量由规则推导，或者给出在仓库内部自洽的默认值（你仍可以覆盖它们，但默认路线是一条能跑通、能复盘的黄金路径）。本章将按“从输入到训练闭环”的顺序拆开它：模型形状怎么由 `depth` 变出来、训练终点如何被定义、batch/LR/weight decay 为什么这样缩放，以及一些只看代码才能注意到的细节（FA3/FP8/`torch.compile`、logit softcap、vocab padding）。
 
 ---
 
-## 5.1 告别超参炼丹：单一旋钮的极简主义与第一性原理
+## 5.1 为什么要“单旋钮”：让每个实验点都可比较
 
-在传统的预训练流程中，超参数搜索空间是一个高维度的灾难。假设你有 10 个关键超参数，每个参数只有 3 个候选值，组合起来就有 $3^{10} \approx 59000$ 种可能性。对于动辄需要成百上千 GPU 小时的 LLM 预训练来说，网格搜索（Grid Search）是完全不切实际的。
+在传统 LLM 预训练里，你可以同时调 10 个关键超参；但当每个实验都要花掉大量 GPU 小时时，“超参自由度”会变成灾难：你很难复盘某次表现变差究竟是因为数据 horizon 不同、batch 不同、还是 schedule 形状不同。
 
-nanochat 的 `scripts/base_train.py` 引入了基于第一性原理与经验法则的“自动推导配方”。整个预训练脚本的入口只暴露一个最核心的变量：`depth`（模型深度，通常指代 Transformer 的层数 $L$）。系统将其作为整个模型规模的“锚点”（Anchor），通过硬编码的缩放规则，推导出所有其他配置。
-
-这种设计的核心思想是：**与其让用户在无尽的参数空间中试错，不如提供一条已经被证明在局部绝对可行且高效的“黄金路径”。**
-
-以下 ASCII 图展示了 `depth` 旋钮是如何驱动整个预训练引擎的配置生成的：
+`base_train` 的策略是把大量耦合关系固化为一个映射：给定 `depth`，其余关键量尽量按同一套规则推导，保证每个实验点都能放到同一条“缩放曲线”上对比：
 
 ```text
-                              [ 用户输入: --depth 12 ]
-                                         │
-                                         ▼
-                        【 nanochat 自动推导引擎 (Auto-Config) 】
-                                         │
-       ┌─────────────────────────────────┼─────────────────────────────────┐
-       ▼                                 ▼                                 ▼
-  【1. 模型形状推导】                 【2. 数据与算力推导】              【3. 优化器与调度推导】
-  ├─ 隐藏层维度 $d_{model}$           ├─ 目标参数量 $N$                  ├─ 全局批次大小 $B$ (Tokens)
-  ├─ 注意力头数 $n_{heads}$           ├─ 训练数据量 $D$ (Tokens)         ├─ 峰值学习率 $\eta_{max}$
-  ├─ 前馈网络维度 $d_{ffn}$           ├─ 理论浮点运算量 $C$ (FLOPs)      ├─ 权重衰减系数 $\lambda$
-  └─ 词表大小 $V$ (固定或对齐)        └─ 总更新步数 $Steps$              └─ 预热与余弦衰减周期 $T$
+                [用户输入：--depth = L]
+                         |
+                         v
+  +--------------------------------------------------+
+  | (A) 模型形状：n_embd / n_head / window_pattern     |
+  +--------------------------------------------------+
+                         |
+                         v
+  +--------------------------------------------------+
+  | (B) 训练终点：num_iterations / target_flops /      |
+  |     tokens:scaling_params ratio                   |
+  +--------------------------------------------------+
+                         |
+                         v
+  +--------------------------------------------------+
+  | (C) 优化配方：total_batch_size / (Muon+AdamW) LRs  |
+  |     / weight_decay / warmup-warmdown              |
+  +--------------------------------------------------+
 ```
 
-> **Rule of Thumb (经验法则)：**
-> 在 nanochat 中，永远不要试图通过硬编码去绕过自动推导逻辑（除非你正在进行专门的架构消融实验）。如果你觉得模型收敛太慢，正确的做法是增大 `depth` 并提供相应的算力，而不是强行把一个 `d12` 模型的学习率调大 10 倍，这只会导致 NaN（数值溢出）。
+**Rule-of-thumb：** 做 scaling sweep（例如 `d12 → d24 → d36`）时，宁愿少改旋钮，也不要“顺手”把一堆参数一并换掉。否则你得到的不是缩放定律曲线，而是一堆不可归因的数据点。
 
 ---
 
-## 5.2 模型形状的自动推导：从深度到三维张量
+## 5.2 从 `depth` 到模型形状：`aspect_ratio`、`head_dim` 与 `window_pattern`
 
-在给定层数 $L$（即 `depth`）后，模型的第一步是确定网络的三维形状。为了保证计算效率、张量切分的便利性以及在现代 GPU 矩阵乘法单元（如 Tensor Cores）上的极高利用率，nanochat 遵循以下严格的数学与工程法则：
+`base_train` 虽然以 `depth` 为主旋钮，但模型形状并不是“拍脑袋”：它由 `aspect_ratio`、`head_dim` 与对齐规则共同决定。
 
-### 5.2.1 隐藏层维度 ($d_{model}$) 与注意力头数 ($n_{heads}$)
+### 5.2.1 `n_embd` 的推导：先按比例，再按 `head_dim` 对齐
 
-随着层数 $L$ 的增加，模型需要更宽的表示空间来避免信息瓶颈。在 nanochat 中，$d_{model}$ 通常会与 $L$ 保持一定的正相关关系。更重要的是，为了迎合 FlashAttention 等底层算子的内存对齐要求，单个注意力头的维度 $d_{head}$ 必须被严格限制。
+在 `scripts/base_train.py` 的 `build_model_meta()` 里，隐藏维度（`n_embd`）的规则可以概括为三步：
 
-$$ d_{head} = \frac{d_{model}}{n_{heads}} $$
+1. 理想宽度：$$d_{\text{base}} = L \times r$$ 其中 $L=\text{depth}$，$r=\text{aspect\_ratio}$（默认 64）。
+2. 向上对齐到 `head_dim` 的整数倍：$$d_{\text{model}} = \left\lceil \frac{d_{\text{base}}}{d_{\text{head}}} \right\rceil \cdot d_{\text{head}}$$ 其中 $d_{\text{head}}=\text{head\_dim}$（默认 128）。
+3. 头数：$$n_{\text{head}} = \frac{d_{\text{model}}}{d_{\text{head}}}$$ 并默认设置 `n_kv_head = n_head`。
 
-在 nanochat 的配方中，$d_{head}$ 通常被硬性固定为 $64$ 或 $128$。这意味着：
-*   如果推导出 $d_{model} = 768$，且设定 $d_{head} = 64$，则 $n_{heads} = 12$。
-*   如果推导出 $d_{model} = 1024$，且设定 $d_{head} = 64$，则 $n_{heads} = 16$。
+这条规则的价值在于：**把 head_dim 变成一个硬约束**（而不是事后补救的整除检查）。例如：
 
-这种设计确保了无论模型怎么缩放，注意力机制的 Q、K 矩阵在显存中的块大小（Block Size）始终是硬件友好的。
+- `depth=12`：$d_{\text{base}}=768$，本身是 128 的倍数，所以 $d_{\text{model}}=768$，$n_{\text{head}}=6$（每头 128 维）。
+- `depth=13`：$d_{\text{base}}=832$，向上对齐到 $896$，所以 $n_{\text{head}}=7$。
 
-### 5.2.2 参数量 ($N$) 的精确估算
+### 5.2.2 `vocab_size` 来自 tokenizer（且内部会做 vocab padding）
 
-在确定了 $L$、$d_{model}$ 和 $V$（词表大小，例如 100352）之后，我们需要估算模型的总参数量 $N$。这是后续推导训练数据量和算力预算的基石。
+`base_train` 在初始化模型前会先加载磁盘上的 tokenizer，并读取 `vocab_size`。这意味着预训练配方与 tokenizer **强绑定**：checkpoint 的 `meta_*.json` 会写入这个 `vocab_size`，加载模型时会进行一致性断言。
 
-对于一个标准的纯解码器（Decoder-only）Transformer，参数主要由两部分组成：
-1.  **嵌入层（Embedding）与输出层（LM Head）**：通常共享权重，参数量为 $V \times d_{model}$。
-2.  **Transformer 块（Blocks）**：每个块包含自注意力层（Self-Attention）和前馈网络（MLP）。
-    *   注意力层：$W_q, W_k, W_v, W_o$ 四个矩阵，每个大小近似为 $d_{model} \times d_{model}$。总计 $4 d_{model}^2$。
-    *   MLP 层：通常扩展因子为 4（即 $d_{ffn} = 4 d_{model}$），包含两个矩阵 $d_{model} \times 4d_{model}$ 和 $4d_{model} \times d_{model}$。总计 $8 d_{model}^2$。
-    *   每层总计：$12 d_{model}^2$。
+一个容易忽略的细节在 `nanochat/gpt.py`：模型会把 `vocab_size` 向上 padding 到 64 的倍数用于效率（embedding 与 lm_head 的权重矩阵会略大），但 forward 里会把 logits **切回真实的 `vocab_size`**。因此：
 
-因此，非嵌入层的核心参数量（通常用于 Scaling Laws 的计算）可以通过以下公式精确近似：
+- 你看 `state_dict` 的参数量，可能会比“理论 vocab_size×d_model”略大；
+- 但训练/评估的损失与采样只发生在真实词表上。
 
-$$ N_{core} \approx 12 \times L \times d_{model}^2 $$
+### 5.2.3 `window_pattern`：滑动窗口注意力的“层级模式串”
 
-总参数量则为：
+`GPTConfig.window_pattern` 是一个由 `S`/`L` 组成的字符串，按层循环平铺（tile）：
 
-$$ N_{total} = V \times d_{model} + 12 \times L \times d_{model}^2 $$
+- `L`：全上下文（左窗口 = `sequence_len`）
+- `S`：半上下文（左窗口 = `sequence_len // 2`）
+- 最后一层强制为 `L`（保证最终层能看全上下文）
 
-**具体案例：**
-*   **`depth=12` (类 GPT-2 Small)**：$L=12, d_{model}=768$。$N_{core} \approx 12 \times 12 \times 768^2 \approx 84.9 \times 10^6$。加上词表嵌入，总参数量约 $124 \times 10^6$（124M）。
-*   **`depth=24` (类 GPT-2 Medium)**：$L=24, d_{model}=1024$。$N_{core} \approx 12 \times 24 \times 1024^2 \approx 301.9 \times 10^6$。加上词表嵌入，总参数量约 $350 \times 10^6$（350M）。
+默认模式是 `SSSL`：多数层用半窗口节省注意力开销，周期性插入全窗口层做“全局整合”。这对吞吐很敏感，但也强依赖底层注意力实现。
 
----
+`base_train` 启动时会打印 FlashAttention 3 是否可用：FA3 只在 Hopper（sm90）上启用；没有 FA3 时会回退到 PyTorch SDPA。此时若继续用 `window_pattern != L`，训练会走一条显式 mask 的慢路径，脚本会直接警告“GPU 利用率会很糟”。因此：
 
-## 5.3 训练超参的计算最优解（Chinchilla 启发）
-
-知道了模型有多大（参数量 $N$），接下来的核心问题是：我们需要喂给它多少数据？用多大的批次？用多大的学习率？
-
-nanochat 的配方深受 DeepMind 提出的 **Chinchilla 缩放定律** 的启发。Chinchilla 的核心结论是：在给定的算力预算 $C$ 下，模型大小 $N$ 和训练数据量 $D$ 应该同比例缩放。
-
-### 5.3.1 训练数据量 ($D$) 与算力预算 ($C$)
-
-语言模型训练的浮点运算量（FLOPs）可以通过一个极其优雅的公式近似：对于每个 Token，每个参数在正向传播中需要 2 次浮点运算（一次乘法，一次加法），在反向传播中需要 4 次浮点运算（计算激活梯度和权重梯度）。因此，总算力 $C$ 为：
-
-$$ C \approx 6 \times N \times D $$
-
-根据 Chinchilla 法则，为了达到计算最优，Tokens 与 Params 的比例应该保持在一个常数附近，通常是 $20:1$。
-
-$$ D_{optimal} \approx 20 \times N $$
-
-> **Rule of Thumb (经验法则)：**
-> 在 nanochat 中，系统会自动计算 $N$，并设定目标训练 Token 数 $D = 20N$。例如，对于 124M 的模型，系统会自动规划约 2.5B（25亿）个 Token 的训练轨迹。如果你手动截断了训练（例如只跑了 1B Token），模型将处于“欠拟合”状态；如果你强行喂入 10B Token（Llama 3 风格的 Over-training），虽然能提升推理时的性价比，但在纯粹的训练 FLOPs 效率上是不经济的。
-
-### 5.3.2 全局批次大小 ($B$) 的阶梯式缩放
-
-批次大小决定了梯度更新的方向有多准确。根据 OpenAI 的梯度噪声尺度（Gradient Noise Scale）理论，较大的模型在训练时能够容忍、并且实际上需要更大的全局批次大小来保证梯度更新的信噪比。
-
-如果批次太小，大模型的更新会充满噪声，导致损失震荡；如果批次太大，虽然单步时间变长，但数据效率（Data Efficiency）会急剧下降，造成算力浪费。
-
-nanochat 会根据 $N$ 自动阶梯式地上调全局批次大小 $B$（单位通常为 Tokens/Batch）：
-*   对于 $N < 100M$ 的极小模型，$B \approx 0.5 \times 10^6$ Tokens。
-*   对于 $N \approx 300M$ 的模型，$B \approx 1.0 \times 10^6$ Tokens。
-*   对于 $N > 1B$ 的模型，$B \approx 2.0 \times 10^6$ 到 $4.0 \times 10^6$ Tokens。
-
-**注意：这里的 $B$ 是全局批次大小！** 无论你用 1 张卡还是 8 张卡，全局 $B$ 的数学意义是不变的。系统会通过自动调整梯度累加步数（Gradient Accumulation Steps）来弥补物理显存的不足（详见第 6 章）。
-
-### 5.3.3 峰值学习率 ($\eta_{max}$) 的衰减规律
-
-越大的模型，其参数矩阵的范数越大，在训练初期越容易出现数值不稳定（如激活值爆炸）。因此，峰值学习率 $\eta_{max}$ 必须随着参数量 $N$（或 $d_{model}$）的增加而严格降低。
-
-在标准参数化（Standard Parameterization）下，nanochat 遵循类似 $\eta_{max} \propto \frac{1}{\sqrt{d_{model}}}$ 的衰减规律。例如：
-*   `d12` ($d_{model}=768$) 的峰值学习率可能设定为 $6.0 \times 10^{-4}$。
-*   `d24` ($d_{model}=1024$) 的峰值学习率会自动降低到 $3.0 \times 10^{-4}$ 左右。
+**Rule-of-thumb：** 非 Hopper 环境（或 FA3 不可用）上，优先用 `--window-pattern L` 跑通与对齐；确认 FA3 可用后，再用 `SSSL` 类模式串做吞吐优化。
 
 ---
 
-## 5.4 学习率调度：预热与余弦退火的数学之美
+## 5.3 “算力预算”在代码里怎么落地：params、tokens、FLOPs
 
-确定了峰值学习率 $\eta_{max}$ 和总训练步数 $T_{total} = \frac{D}{B}$ 后，nanochat 会自动构建学习率调度器（LR Scheduler）。整个训练过程被严格划分为三个阶段。
+### 5.3.1 参数计数是分组的（而且 embedding 与 lm_head 不共享）
 
-```text
- Learning Rate $\eta$
-   ^
-   |      /\
-   |     /  \
-   |    /    \
-   |   /      \  <- 余弦衰减 (Cosine Decay)
-   |  /        \
-   | /          \
-   |/            \_______________________
-   +-------------------------------------> Training Steps $t$
-   | Warmup |       Decay Phase          | Min LR
-```
+很多框架会默认“输入 embedding 与输出 lm_head 权重共享”，但 nanochat 的 `nanochat/gpt.py` 明确采用 **untied weights**：`wte` 与 `lm_head` 是两套独立权重。除此之外，模型还包含一些很“nanochat”的额外参数：
 
-### 5.4.1 预热期 (Warmup Phase)
+- `value_embeds`：交替层的 value embedding（配合门控，类似 value residual 结构）；
+- `resid_lambdas` 与 `x0_lambdas`：每层的可学习标量，用于残差缩放与回注入初始 embedding；
+- rotary embeddings buffer：作为非持久 buffer（`persistent=False`）存在，不进 checkpoint。
 
-在训练的最初阶段（通常占总步数的 1%~5%，或固定的 1000~2000 步），学习率从接近 0 线性增长到峰值 $\eta_{max}$。
+`GPT.num_scaling_params()` 会把参数拆为：`wte`、`value_embeds`、`lm_head`、`transformer_matrices`、`scalars`、`total`。这不是“统计癖”，而是为了后续 scaling laws / compute horizon 的定义更清晰。
 
-$$ \eta_t = \eta_{max} \times \frac{t}{T_{warmup}} \quad \text{for } t \le T_{warmup} $$
+### 5.3.2 训练终点（三选一）：`--num-iterations` / `--target-flops` / `--target-param-data-ratio`
 
-**为什么必须预热？**
-在模型随机初始化时，损失函数的地形（Loss Landscape）极其陡峭且混乱。此时 LayerNorm 的方差尚未稳定，梯度的绝对值非常大。如果直接使用峰值学习率 $\eta_{max}$ 进行更新，会产生巨大的参数跳跃，瞬间破坏模型的初始化权重，导致前向传播出现 NaN。预热阶段让模型在初期能够以极小的步伐“试探”出一个合理的优化方向，平稳度过最危险的阶段。
+`base_train` 对训练步数（`num_iterations`）有明确优先级：
 
-### 5.4.2 余弦衰减期 (Cosine Decay Phase)
+1. 你显式给 `--num-iterations`；
+2. 否则你给 `--target-flops`（结合 `estimate_flops()` 与 batch 反推步数）；
+3. 否则走最常用的 `--target-param-data-ratio`（默认 10.5）。
 
-度过预热期后，学习率进入漫长的衰减期。nanochat 采用标准的余弦退火（Cosine Annealing）策略，学习率按照半个余弦波的形状平滑下降至最小学习率 $\eta_{min}$（通常为 $\eta_{max}$ 的 10%）。
+这里最容易误解的是 `target_param_data_ratio`。在 `base_train.py` 里它对应的是：
 
-$$ \eta_t = \eta_{min} + \frac{1}{2}(\eta_{max} - \eta_{min}) \left( 1 + \cos\left( \frac{t - T_{warmup}}{T_{decay} - T_{warmup}}\pi \right) \right) $$
+- 用 `scaling_params = transformer_matrices + lm_head`（注意：不是 total params）；
+- 目标训练 tokens 为 $$D_{\text{target}} = r \cdot N_{\text{scaling}}$$ 其中 $r=\text{target\_param\_data\_ratio}$（默认 10.5）；
+- 对应步数 $$\text{num\_iterations} = \left\lfloor \frac{D_{\text{target}}}{B_{\text{total(tokens)}}} \right\rfloor$$
 
-**为什么选择余弦衰减？**
-1.  **初期保持高探索率**：余弦曲线在顶部的导数较小，意味着模型能在较高的学习率下保持较长时间，充分探索参数空间，逃离局部次优解。
-2.  **后期加速收敛**：在曲线中段，学习率快速下降，促使模型进入更深的局部极小值盆地。
-3.  **平滑过渡**：相比于阶梯式衰减（Step Decay），余弦衰减没有突变点，避免了损失曲线的剧烈震荡。
+脚本会在日志里打印 `Tokens : Scaling params ratio`，用来让你在实验复盘时明确：当前 run 的“数据:参数比”到底是多少。
 
-### 5.4.3 最小学习率 (Min LR Phase)
+**Rule-of-thumb：** 不要把这个 ratio 自动等同于 “Chinchilla 的 20:1”。它是 nanochat 内部定义的实验假设，并且作用于特定的参数子集；你应该用日志中打印出来的实际 ratio 来做对齐与比较。
 
-在训练的尾声（通常是最后的 10% 步数，或者达到目标 Token 数后继续训练时），学习率衰减到并保持在 $\eta_{min}$。这提供了一个极其精细的收敛微调阶段，使得模型权重能够“沉淀”到损失函数的最底部。
+---
+
+## 5.4 Batch/LR/Weight Decay：把“经验”写成可复现的推导
+
+### 5.4.1 `--total-batch-size` 的单位是 tokens（不是 sequences）
+
+nanochat 把 “全局 batch size”定义为每次 optimizer step 看到的 **tokens 总数**。这减少了很多歧义：同样的 `total_batch_size`，无论你是 $B=32,T=2048$ 还是 $B=64,T=1024$，优化器更新时看到的 token 数都一致。
+
+如果你不提供 `--total-batch-size`，脚本会用一套非常具体的规则去预测“近似最优 batch”：
+
+- 参考点固定为 `d12`：$B_{\text{ref}} = 2^{19}=524{,}288$ tokens；
+- 训练 token 参考 $D_{\text{ref}}$ 来自同一套 `target_param_data_ratio` 规则；
+- 用 Power Lines 论文的经验式：$$B_{\text{opt}} \propto D^{0.383}$$
+- 最后把预测 batch round 到最近的 2 的幂（为了效率与工程离散化）。
+
+### 5.4.2 设备 batch 与梯度累加：用一条等式把 OOM 变成“可控”
+
+训练里真正受显存约束的是 `--device-batch-size`（每卡每次 forward/backward 处理多少条序列）。`base_train` 用一条严格等式把它与 `total_batch_size` 串起来：
+
+$$\text{grad\_accum} = \frac{B_{\text{total(tokens)}}}{(\text{device\_batch} \times T \times W)}$$
+
+其中 $T=\text{max\_seq\_len}$，$W=\text{world\_size}$。脚本会 assert 这个值必须是整数。
+
+**Rule-of-thumb：** OOM 时优先减 `--device-batch-size`，让 `grad_accum` 自动变大；不要轻易改 `--total-batch-size`，因为那会改变优化轨迹（梯度噪声尺度）。
+
+### 5.4.3 优化器是 “Muon + AdamW” 的混合体（参数分组非常关键）
+
+`GPT.setup_optimizer()` 会把参数拆成两大类：
+
+1. **矩阵参数（Transformer blocks 里的线性权重）**：走 Muon（`kind='muon'`），并按 shape 分组堆叠优化；
+2. **非矩阵参数（embedding/lm_head/value_embeds/scalars）**：走 AdamW（`kind='adamw'`），学习率各不相同。
+
+一些只看代码才会注意到的细节：
+
+- `lm_head`（unembedding）和 `wte`（embedding）使用不同基准学习率；
+- `value_embeds` 跟 embedding 走一套 LR；
+- `resid_lambdas` 的 LR 额外乘了 $0.01$（极保守）；
+- `x0_lambdas` 用了不同的 Adam betas；
+- AdamW 组的 weight decay 被设为 0（Muon 组才有 weight decay）。
+
+除此之外，还有两层系统化缩放：
+
+1. batch 变大时，学习率统一按 $$\eta \propto \sqrt{B/B_{\text{ref}}}$$ 缩放；
+2. AdamW 组再按 $$\eta \propto 1/\sqrt{d_{\text{model}}}$$ 做 `dmodel_lr_scale`（以 768 为基准）。
+
+Muon 还有两个“随训练推进而变化”的调度细节：
+
+- **动量 warmup**：Muon 的 momentum 会在前约 300 步从 0.85 线性爬升到 0.95（更像一个“让优化器慢慢变得更惯性”的启动过程），避免一开始就用很大的动量把随机初始化的噪声放大。
+- **权重衰减 warmdown**：Muon 的 weight decay 会在训练过程中线性衰减到 0（见下一小节）。这相当于把“强正则”更多放在早期，让后期更专注于细化收敛。
+
+### 5.4.4 Weight Decay：先按理论缩放，再线性衰减到 0
+
+`base_train` 先用一个“$T_{\text{epoch}}$”框架（把 $$T_{\text{epoch}}=\frac{B}{\eta\lambda D}$$ 维持常数）来缩放 weight decay：
+
+$$\lambda = \lambda_{\text{ref}} \cdot \sqrt{\frac{B}{B_{\text{ref}}}} \cdot \frac{D_{\text{ref}}}{D}$$
+
+然后在训练过程中再把 weight decay 从该值线性衰减到 0，保证“越到后期越少扰动”。
+
+### 5.4.5 学习率 schedule：线性 warmup / constant / 线性 warmdown（不是余弦）
+
+必须明确：nanochat 的 `base_train` 默认不是余弦调度，而是三段式线性形状：
+
+- warmup：前 `warmup_ratio * num_iterations` 线性升到 1
+- constant：中间保持 1
+- warmdown：后 `warmdown_ratio * num_iterations` 线性降到 `final_lr_frac`
+
+恢复训练时，只要 `step` 恢复正确，这个 schedule 天然连续，不需要额外保存“调度器状态文件”。
+
+---
+
+## 5.5 性能与数值：FA3、FP8、`torch.compile`、logit softcap
+
+预训练配方里最“值钱”的工程细节，很多都来自下面四个点：
+
+1. **FlashAttention 3 自动切换**：`nanochat/flash_attention.py` 会在 Hopper（sm90）上使用 FA3，在其他硬件回退到 SDPA。`base_train` 启动时会明确打印是否启用 FA3。
+2. **FP8 训练（可选）**：`--fp8` 会把满足条件的大型 `nn.Linear` 替换成 Float8 版本（维度需能被 16 整除，且足够大）。评估时会临时把这些模块 swap 回 BF16/FP32 版本，避免评估指标被 FP8 数值误差污染。
+3. **`torch.compile` 的双刃剑**：脚本会 `torch.compile(model, dynamic=False)` 提升吞吐，但保存 checkpoint 用的是 `orig_model.state_dict()`，避免编译 wrapper 引入的 key 前缀污染。
+4. **logit softcap**：`nanochat/gpt.py` 在计算 logits 后会在 FP32 中做 $$z \leftarrow s \cdot \tanh(z/s)$$ 的 softcap（$s=15$），用于抑制极端 logit 带来的数值尖刺。
+
+补充两个“只看实现才会注意到”的点：
+
+- **FLOPs 估算会受 `window_pattern` 影响**：`GPT.estimate_flops()` 并不是只用 $6ND$ 的拍脑袋常数，它会把“矩阵参数的 6 FLOPs/param/token”与“注意力里 $QK^\top$ 的额外 FLOPs”分开估计；启用滑动窗口后，每层的有效注意力长度会被窗口截断，所以同一个 `depth` 在不同 `window_pattern` 下的 “FLOPs per token” 也会变。这也是为什么 `window_pattern` 在 nanochat 里既是质量旋钮，也是吞吐旋钮。
+- **embedding/value_embeds 会在 CUDA 上转成 BF16**：`init_weights()` 里会把 `wte` 和 `value_embeds` cast 到 BF16 以节省显存（优化器仍能容忍这种精度），这能在小卡上多挤出一点 batch 空间。
 
 ---
 
 ## 本章小结
 
-- **极简主义**：nanochat 摒弃了复杂的超参网格搜索，采用极简的配置策略，通过单一参数 `depth` 控制全局架构与训练轨迹。
-- **形状推导**：核心参数量估算公式为 $N_{core} \approx 12 \times L \times d_{model}^2$。注意力头维度 $d_{head}$ 通常固定，以保证硬件执行效率。
-- **Chinchilla 法则**：模型参数量 $N$ 决定了计算最优的训练 Token 数 $D$，二者比例严格保持在 $D \approx 20N$ 左右。
-- **动态缩放**：随着模型规模增大，全局批次大小 $B$ 自动阶梯式增加，而峰值学习率 $\eta_{max}$ 自动按比例降低。
-- **调度器**：严格的 线性预热 + 余弦衰减 + 最小学习率 策略，是保证大规模模型从随机初始化平稳过渡到深度收敛的唯一法宝。
+- `depth` 是主要规模旋钮；`aspect_ratio/head_dim/window_pattern` 决定形状与注意力窗口，但默认值构成一条“能跑通、能对齐”的黄金路径。
+- `n_embd` 的推导是 “$L \times r$ 后向上对齐到 `head_dim` 的倍数”，从而保证 head_dim 可控且整除关系恒成立。
+- 训练终点三选一：`--num-iterations` / `--target-flops` / `--target-param-data-ratio`；默认 ratio=10.5 且作用于 `transformer_matrices + lm_head`。
+- batch size 会随 token horizon 按 $D^{0.383}$ 增长并 round 到 2 的幂；学习率按 $\sqrt{B/B_{\text{ref}}}$ 缩放；weight decay 先按理论缩放、再线性衰减到 0。
+- 优化器是 Muon（矩阵）+ AdamW（embedding/lm_head/value_embeds/scalars）的混合体；参数分组与 LR 缩放是配方的核心之一。
 
 ---
 
 ## 练习题
 
-**1. 基础题：在 nanochat 中，为什么选择 `depth` 作为控制模型规模的单一旋钮，而不是直接让用户输入“期望的参数量（如 100M）”？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 思考参数量和张量形状之间的关系。100M 参数可以由极深极窄的网络组成，也可以由极浅极宽的网络组成。
-**Answer:** 
-直接输入参数量无法唯一确定模型的三维形状（层数、维度、头数）。如果让用户随意配置，极易产生不符合硬件对齐或 Scaling Laws 的畸形网络（例如层数极多但维度极窄，导致 GPU 内存带宽成为瓶颈而算力闲置）。通过 `depth` 旋钮，nanochat 可以强制模型遵循经过验证的经验比例（如 $d_{model}$ 与 $L$ 的比例，$d_{head}$ 固定为 64/128），从而在保证参数量的同时，实现底层张量运算的“开箱即用”与硬件最优。
-</details>
+1. **（基础）为什么 nanochat 更愿意让你输入 `depth`，而不是让你直接输入“目标参数量 N”？**
+   - *Hint：同样的参数量可以对应不同的张量形状；硬件效率依赖整除与对齐。*
+   <details>
+   <summary>查看提示与答案</summary>
+   因为参数量无法唯一确定 `n_embd/n_head/head_dim` 等形状参数，容易产生不整除、难并行、效率差或与仓库假设不兼容的配置。用 `depth` 作为主轴，再用固定规则推导形状，可以把大量工程约束（对齐、head_dim 约束）写死，从而让不同实验点可比较、可复盘。
+   </details>
 
-**2. 基础题：假设一个 nanochat 模型的参数量 $N$ 为 1.5 亿（150M），根据系统内置的 Chinchilla 经验法则，它大致会自动分配多少训练 Token？完成这些 Token 大约需要多少次浮点运算（FLOPs）？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 回顾公式 $D \approx 20N$ 和 $C \approx 6ND$。
-**Answer:** 
-1. 训练 Token 数 $D \approx 20 \times 150 \times 10^6 = 3 \times 10^9$（即 30 亿 / 3B Tokens）。
-2. 总浮点运算量 $C \approx 6 \times N \times D = 6 \times (1.5 \times 10^8) \times (3 \times 10^9) = 2.7 \times 10^{18}$ FLOPs。
-</details>
+2. **（基础）给定 `depth=13`、`aspect_ratio=64`、`head_dim=128`，计算 `n_embd` 与 `n_head`。**
+   - *Hint：先算 $d_{base}=L\times r$，再做向上对齐。*
+   <details>
+   <summary>查看提示与答案</summary>
+   $d_{base}=13\times 64=832$。向上对齐到 128 的倍数得到 $d_{model}=896$。因此 $n_{head}=896/128=7$。
+   </details>
 
-**3. 基础题：在预训练初期的前 2000 步，为什么必须包含学习率预热（Warmup）阶段？如果去掉会发生什么？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 想象你在一个布满悬崖的漆黑山谷里，刚开始你是应该大步狂奔还是小步试探？
-**Answer:** 
-在模型随机初始化时，参数处于极其随机的状态，损失函数的地形非常陡峭，且各个层的激活值方差尚未被 LayerNorm 完全稳定。如果直接使用峰值学习率 $\eta_{max}$ 进行更新，会产生极大的梯度绝对值。这会导致模型权重发生剧烈跳跃，破坏初始化的分布，极大概率引发数值溢出（产生 NaN）或陷入极差的局部最优（Loss 居高不下）。预热阶段让学习率从零缓慢上升，使模型在初期能够以极小的步伐平稳地找到一个合理的优化方向，建立起初步的特征表示。
-</details>
+3. **（基础）解释 `total_batch_size`（tokens）与梯度累加的关系。**
+   - *Hint：用公式 $\text{grad\_accum} = B_{\text{total}}/(B_{\text{device}}\cdot T\cdot W)$。*
+   <details>
+   <summary>查看提示与答案</summary>
+   `total_batch_size` 表示一次 optimizer step 看到的 tokens 总数。每张卡一次 forward/backward 消耗 `device_batch_size * max_seq_len` 个 token，全局乘上 `world_size`。为了让一次更新消耗的 tokens 精确等于 `total_batch_size`，需要用梯度累加把多个 micro-step 的梯度加起来，累加步数正是上述公式。
+   </details>
 
-**4. 基础题：随着模型 `depth` 的增加，全局批次大小（Global Batch Size）和峰值学习率（Peak LR）应该分别呈现怎样的变化趋势？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 大模型对噪声的容忍度如何？大模型的权重矩阵范数如何？
-**Answer:** 
-随着模型深度的增加（参数量变大）：
-1. **全局批次大小应该增加**：大模型需要更准确的梯度估计来更新庞大的参数群，更大的批次能降低梯度噪声，提供更稳定的优化方向。
-2. **峰值学习率应该降低**：大模型的参数矩阵更大，相同的学习率会导致更大的绝对更新量，极易引发数值不稳定。因此必须降低学习率以保证训练平稳。
-</details>
+4. **（挑战）为什么 `target_param_data_ratio` 用的是 `transformer_matrices + lm_head`，而不是 `total`？这会影响你如何解读 ratio？**
+   - *Hint：embedding 是查表；不同参数子集对 scaling 拟合的“干净程度”不同。*
+   <details>
+   <summary>查看提示与答案</summary>
+   这是为了让 scaling laws 假设更稳定：矩阵乘法参数与 FLOPs/损失缩放关系更直接；embedding 受词表大小强影响且更像查表；额外标量或 value embedding 的占比与作用也可能不符合传统假设。因此 nanochat 选择用 `transformer_matrices + lm_head` 做 scaling params。解读 ratio 时必须明确：它不是“总参数的 20:1”，而是“某个参数子集上的实验假设”，真正用于对齐比较的是日志打印出来的实际 ratio。
+   </details>
 
-**5. 挑战题：假设你原本计划训练一个 `d12` 模型，预算是 1000 个 GPU 小时。现在老板突然给了你 4000 个 GPU 小时（算力翻了 4 倍）。为了达到最低的验证集损失，你是应该将算力全部用于增加模型的 `depth`，还是全部用于在原 `d12` 模型上训练更多的 Token（比如将比例提升到 80:1）？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 根据 Chinchilla 缩放定律，当算力 $C$ 增加时，$N$ 和 $D$ 应该如何分配？
-**Answer:** 
-都不对。根据计算最优原则（Chinchilla），当算力 $C$ 增加时，应该同比例地增加模型规模 $N$ 和训练数据量 $D$。因为 $C \propto N \times D$，当 $C$ 变为 4 倍时，最优解是让 $N$ 变为原来的 2 倍，同时 $D$ 也变为原来的 2 倍（即保持 $20:1$ 的比例不变）。
-因此，最合理的做法是适当增加 `depth`（使得参数量翻倍），系统会自动推导出翻倍的训练 Token 数。单纯在一个维度上消耗所有额外算力：
-- 仅增加模型不加数据：模型会严重过拟合。
-- 仅加数据不加模型（Over-training）：虽然能提升推理时的性价比（如 Llama 3 的做法），但在纯粹追求“给定算力下的最低训练损失”这一数学目标时，并非最优解，因为小模型的表达能力瓶颈会限制最终的 Loss 下降。
-</details>
+5. **（挑战）`warmup_ratio=0`、`warmdown_ratio=0.5`、`final_lr_frac=0` 时，在训练进度 75% 处，`lr_multiplier` 约等于多少？**
+   - *Hint：75% 已经进入 warmdown 且过了一半。*
+   <details>
+   <summary>查看提示与答案</summary>
+   warmdown 占最后 50%。进度 75% 相当于 warmdown 进行到一半，线性从 1 降到 0，因此 `lr_multiplier≈0.5`。
+   </details>
 
-**6. 挑战题：在余弦衰减调度中，假设总步数为 100,000 步。如果由于某种原因你提前终止了训练（例如在第 50,000 步手动 Ctrl+C），这与“一开始就设定总步数为 50,000 步并完整跑完”相比，模型最终的性能会有什么差异？为什么？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 画一下两种情况下的学习率曲线，看看在第 50,000 步时，两者的学习率处于什么位置。
-**Answer:** 
-提前终止的性能会**显著差于**一开始就设定好 50,000 步并跑完的模型。
-原因在于余弦调度器是根据预设的总步数来规划下降曲线的。
-- 如果设定 100k 步但在 50k 步终止：此时学习率才刚刚沿着余弦曲线下降到一半（大约是峰值的一半），模型仍然处于高学习率的“探索”阶段，权重没有机会在极小值盆地中沉淀和精细收敛。
-- 如果设定 50k 步并完整跑完：在第 50k 步时，学习率已经平滑衰减到了 $\eta_{min}$（峰值的 10%），模型经历了完整的“探索 -> 收敛 -> 微调”周期，损失值会低得多。
-这被称为“学习率调度视界”（LR Schedule Horizon）问题。
-</details>
+6. **（挑战）为什么脚本会把自动预测的 `total_batch_size` round 到最近的 2 的幂？这对吞吐与实验体系有什么好处？**
+   - *Hint：硬件效率与实验点离散化。*
+   <details>
+   <summary>查看提示与答案</summary>
+   很多 kernel/流水在对齐形状上更高效；同时把 batch 离散到少量可预期的值，可以减少“某个点 batch 只差一点点导致行为不同”的偶然性，让 sweep 更易管理与复盘。代价是 batch 可能略偏离理论最优，但换来工程稳定性与可比较性。
+   </details>
 
-**7. 挑战题：推导 $12 L d_{model}^2$ 公式时，我们忽略了哪些部分的参数？在什么情况下（比如极小模型或极大模型），这种忽略会导致严重的估算误差？**
-<details>
-<summary>查看提示与答案</summary>
-**Hint:** 除了 Transformer Block，模型还有什么？词表大小 $V$ 通常是多少？
-**Answer:** 
-我们主要忽略了**词表嵌入层（Embedding）**和**输出层（LM Head）**的参数，这两部分通常共享权重，参数量为 $V \times d_{model}$。
-- **在极小模型中会导致严重误差**：例如一个微型测试模型 $d_{model}=256, L=4$。核心参数 $12 \times 4 \times 256^2 \approx 3.1M$。但如果词表 $V=100,000$，嵌入层参数就有 $100,000 \times 256 \approx 25.6M$。此时嵌入层占了绝大头，忽略它会导致 $N$ 的估算偏离近 10 倍。
-- **在极大模型中误差可忽略**：例如 $d_{model}=8192, L=80$。核心参数约为 $60B$。而嵌入层 $100,000 \times 8192 \approx 0.8B$。此时嵌入层占比极小（< 1.5%），$12 L d_{model}^2$ 是非常精确的近似。
-</details>
+7. **（挑战）FP8 转换为何要过滤 “维度能被 16 整除且足够大” 的 Linear？如果强行把小 Linear 也转 FP8，可能出现什么问题？**
+   - *Hint：硬件约束 + 量化误差占比。*
+   <details>
+   <summary>查看提示与答案</summary>
+   FP8 GEMM 往往要求特定维度对齐（常见为 16 的倍数）。另外小矩阵算力占比低、却更容易受量化误差影响，收益小、风险高（收敛变差或 kernel 不支持）。过滤能把 FP8 放在最能省时且最不容易翻车的地方。
+   </details>
 
 ---
 
 ## 常见陷阱与错误 (Gotchas)
 
-1. **致命混淆：“全局批次大小 (Global Batch)”与“设备微批次大小 (Micro Batch)”**
-   * **现象**：用户看到自动推导出的全局批次大小是 `2M Tokens`，觉得自己的单张 24G 显卡根本塞不下，于是强行去修改源码里的全局批次大小推导逻辑，把它改成了 `64K Tokens`。结果模型训练出来完全是个智障，Loss 曲线剧烈震荡。
-   * **真相**：自动推导配方计算出的是**全局批次大小**，它决定了梯度更新的数学性质和信噪比。如果遇到显存不足（OOM），**绝不能**去修改推导出的全局批次大小！你应该做的是调小**设备微批次大小**（`--device-batch-size`，即每张卡每次前向传播的样本数）。nanochat 的引擎会自动计算 `Gradient Accumulation Steps = Global Batch / (Micro Batch * Num GPUs)`。通过增加梯度累加步数，系统会在数学上完美等价地维持那个庞大的全局批次大小不变。
+1. **把 `total_batch_size` 当成“序列条数”**
+   - **症状**：你以为 `total_batch_size=524288` 是“52 万条样本”，于是修改 `max_seq_len` 后不理解为什么训练曲线变了。
+   - **修复**：记住它的单位是 tokens。`max_seq_len` 变化会影响每次 micro-step 的 token 消耗，从而改变梯度累加步数与吞吐。
 
-2. **拿小模型的“绝对步数”去衡量大模型的进度**
-   * **现象**：用户先跑了一个 `d12` 模型，发现跑到 100,000 步时收敛了。然后跑 `d24` 模型，跑到 50,000 步时觉得“才跑了一半，肯定还没收敛”，于是强行中断。
-   * **真相**：在 nanochat 中，总步数是由 `Total Tokens / Global Batch Size` 推导出来的。大模型的全局批次大小显著大于小模型。因此，在消耗**相同数量的 Token** 时，大模型的物理更新步数会**更少**。永远不要用绝对的 `Steps` 来横向比较不同 `depth` 模型的训练进度，而应该看 `Tokens Processed` 或 `Epochs`。
+2. **把 `target_param_data_ratio` 误读成 “Chinchilla 固定 20:1”**
+   - **症状**：你看到默认是 10.5 就以为配方错了，直接改成 20，结果与仓库内的基线（leaderboard/scaling 记录）对不上。
+   - **修复**：先明确 ratio 作用于 `transformer_matrices + lm_head`，再用日志里打印的 `Tokens : Scaling params ratio` 来对齐实验假设。
 
-3. **恢复训练（Resume）时的调度器状态断层**
-   * **现象**：训练因为机器故障在 40% 处中断。用户重启脚本，虽然加载了模型权重（Weights），但没有正确加载优化器和学习率调度器的状态（Optimizer/Scheduler State）。导致重启后的第一步，学习率又从 0 开始重新 Warmup，或者直接跳回了峰值 $\eta_{max}$。
-   * **真相**：这将毁灭之前的训练成果。如果学习率突然跳回峰值，巨大的梯度会瞬间摧毁已经收敛了一半的脆弱特征表示（Loss 出现巨大 Spike）。在 nanochat 中，务必确保 `--resume` 标志被正确设置，它会连同 `optimizer.pt` 和 `scheduler.pt` 一起加载，保证余弦曲线的完美接续。
+3. **非 Hopper GPU 还开 `window_pattern=SSSL`，吞吐断崖式下跌**
+   - **症状**：训练能跑但 MFU 很低，step 时间巨大。
+   - **修复**：要么确保 FA3 可用（Hopper 环境），要么先用 `--window-pattern L` 跑通与对齐，再做滑窗模式的性能实验。
 
-4. **强行覆盖推导参数导致 NaN 崩溃**
-   * **现象**：用户觉得自己比 Chinchilla 更懂，通过环境变量或黑客手段强行修改了自动推导出的学习率。例如，给一个庞大的 `d48` 模型设置了 `d12` 级别的高学习率（如 `1e-3`）。
-   * **真相**：极大概率会在训练几百步后，遇到 Loss 突然变成 `NaN`（非数字），或者梯度范数（Gradient Norm）爆炸到几万。请信任配方的默认缩放逻辑，如果非要调，请在推导出的基准值上进行微调（如乘以 0.8 或 1.2），而不是跨数量级盲改。
+4. **恢复训练只加载权重，不加载 optimizer shard**
+   - **症状**：resume 后 loss 抖动、收敛速度明显变慢。
+   - **修复**：用 `--resume-from-step` 恢复，并确保每个 rank 的 `optim_..._rank{rank}.pt` 都存在且可读。学习率/weight decay schedule 由 `step` 计算，因此 `step` 必须与 checkpoint meta 对齐。
+
+5. **tokenizer 与 checkpoint 的 `vocab_size` 不一致**
+   - **症状**：加载时报 “Tokenizer vocab size does not match model config vocab size”。
+   - **修复**：checkpoint meta 里记录了 `vocab_size` 并在加载时 assert。要么使用同一个 tokenizer 目录，要么重新训练 tokenizer 并从头训练模型，避免“半路换词表”。

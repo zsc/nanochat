@@ -81,14 +81,14 @@
                     <div class="tree-item " >
                         <a href="chapter5.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                            <span class="tree-title">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）</span>
                         </a>
                     </div>
                 
                     <div class="tree-item " >
                         <a href="chapter6.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                            <span class="tree-title">第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</span>
                         </a>
                     </div>
                 
@@ -102,7 +102,7 @@
                     <div class="tree-item " >
                         <a href="chapter8.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</span>
                         </a>
                     </div>
                 
@@ -116,7 +116,7 @@
                     <div class="tree-item " >
                         <a href="chapter10.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）</span>
                         </a>
                     </div>
                 
@@ -130,7 +130,7 @@
                     <div class="tree-item " >
                         <a href="chapter12.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（把问题拆成「token × 吞吐 × 数值」三条线）</span>
                         </a>
                     </div>
                 
@@ -322,7 +322,7 @@ $$ \hat{k} = \arg\max_{k} S(C, O_k) $$</p>
 <p><strong>Rule-of-thumb</strong>：在分析 CORE 错误 case 时，如果发现模型总是选择最短的选项，请立即检查你的评测代码是否漏掉了除以选项长度 $M$ 的归一化步骤。</p>
 <hr />
 <h2 id="74-chatcore">7.4 对话与生成评估：ChatCORE 与采样策略</h2>
-<p>当模型进入 SFT（监督微调）和 RL（强化学习）阶段后，它的行为范式发生了根本改变。它被训练成了能够理解特殊控制 Token（如 <code>&lt;|im_start|&gt;</code>、<code>&lt;|im_end|&gt;</code>）并遵循指令的对话体。此时，继续使用选择题的似然度评估就显得不够了，我们需要评估其<strong>生成（Generation）</strong>的质量。</p>
+<p>当模型进入 SFT（监督微调）和 RL（强化学习）阶段后，它的输入输出不再是“任意纯文本续写”，而是被训练成在一套明确的控制 Token 边界内生成：用户消息用 <code>&lt;|user_start|&gt;...&lt;|user_end|&gt;</code> 包裹，助手消息用 <code>&lt;|assistant_start|&gt;...&lt;|assistant_end|&gt;</code> 包裹；如果引入工具，还会出现 <code>&lt;|python_start|&gt;...&lt;|python_end|&gt;</code> 以及由引擎注入的 <code>&lt;|output_start|&gt;...&lt;|output_end|&gt;</code>。这意味着评估也必须在同一格式下进行，否则你测到的不是“能力”，而是“格式偏移”。</p>
 <p>ChatCORE 是 nanochat 的生成式评测套件。它的核心逻辑是：给定一个 Prompt，让模型自由生成一段文本，然后通过精确匹配（Exact Match, EM）或正则表达式提取出核心答案，与标准答案进行比对。</p>
 <h3 id="741-temperature">7.4.1 采样的数学与温度控制 (Temperature)</h3>
 <p>在生成文本时，模型在每一步都会输出一个词表大小的 Logits 向量 $z$。我们通过 Softmax 函数将其转换为概率分布 $P$。为了控制生成的随机性与创造性，我们引入了温度参数 $T$（Temperature）：
@@ -342,13 +342,13 @@ T = 5.0 (平滑):  P = [51.64%, 34.62%, 13.74%] &lt;- 随机性增加
 </code></pre></div>
 
 <h3 id="742">7.4.2 评测与推理的温差</h3>
-<p>在进行 ChatCORE 评测时，我们追求的是<strong>可复现性</strong>和<strong>模型能力上限的精确测量</strong>。因此，在跑评测脚本（如 <code>scripts/chat_eval.py</code>）时，我们强制要求设置 $T=0$（或极小值如 $1e-5$），并关闭 Top-p/Top-k 采样。这确保了只要模型权重不变，每次评测的得分都是绝对一致的。</p>
-<p>然而，在实际的 Chat UI（如 <code>scripts/chat_web.py</code>）中与人类交互时，如果 $T=0$，模型往往会显得“干瘪”、“机械”，甚至陷入循环重复（Repetition Loop）。因此，在推理交互时，我们通常设置 $T \in [0.6, 0.8]$，并配合 Top-p $\approx 0.9$ 来截断长尾的低概率乱码，从而在“逻辑严谨”与“语言生动”之间取得平衡。</p>
+<p>在进行 ChatCORE 评测时，我们追求的是<strong>可复现性</strong>和<strong>模型能力上限的精确测量</strong>。在 nanochat 的采样实现（<code>nanochat/engine.py</code>）里，随机性主要来自“温度采样”（<code>temperature&gt;0</code>）。因此评测时最稳妥的做法是直接设 $T=0$（贪心解码）：此时引擎会对每一步 logits 取 argmax，<code>top_k</code> 即使设置也不会改变结果（因为不会进入采样分支）。只要权重、prompt 构造与任务顺序不变，得分就应当是确定的。</p>
+<p>然而，在实际的 Chat UI（如 <code>scripts/chat_web.py</code>）中与人类交互时，如果 $T=0$，模型往往会显得“干瘪”、“机械”，甚至更容易陷入重复。nanochat 的 CLI/Web 默认使用 $T\approx 0.6\sim 0.8$，并配合 <code>top_k≈50</code>：Top-k 的作用是只在概率最高的 K 个 token 内采样，从而压掉长尾的低概率乱码；在 Web 服务端里，<code>top_k=0</code> 表示不做 top-k 过滤（直接在全词表采样），并且会对温度、top-k、max tokens 做 clamp 以防滥用。</p>
 <p><strong>Rule-of-thumb</strong>：</p>
 <ul>
 <li><strong>评测时</strong>：永远使用 $T=0$（贪心解码）。</li>
-<li><strong>聊天时</strong>：使用 $T=0.7$，Top-p=0.9。</li>
-<li><strong>写代码/数学推导时</strong>：降低温度，使用 $T \in [0.1, 0.3]$，因为这类任务容错率极低，不需要创造性。</li>
+<li><strong>聊天时</strong>：使用 $T \in [0.6, 0.8]$，<code>top_k≈50</code>（需要更确定就降温度或直接设 $T=0$）。</li>
+<li><strong>写代码/数学推导时</strong>：降低温度（例如 $T \in [0.0, 0.2]$），并可适当减小 <code>top_k</code>，因为这类任务容错率极低，不需要“发散探索”。</li>
 </ul>
 <hr />
 <h2 id="75-leaderboard-scaling-laws">7.5 读懂 Leaderboard 与 Scaling Laws</h2>
@@ -458,8 +458,8 @@ BPB = 1.0 bits/byte。</p>
   在团队协作中，如果你说“我的模型 Loss 降到了 1.5，表现很好”，这在工程上是一句废话。因为你的同事可能在用一个词表大小完全不同的 Tokenizer。永远、绝对要使用 BPB 作为跨实验、跨团队比较语言建模能力的唯一指标。</p>
 </li>
 <li>
-<p><strong>Gotcha 2：评测时忘记应用 Chat 模板（Chat Template）</strong>。
-  在对 SFT 模型进行 ChatCORE 评测时，如果你直接将问题作为纯文本输入，而没有调用 <code>tokenizer.apply_chat_template</code>（即缺失了 <code>&lt;|im_start|&gt;user</code>、<code>&lt;|im_end|&gt;</code> 等关键控制 Token），模型会瞬间“失忆”，表现出断崖式下跌，甚至开始胡言乱语。模型的能力被封印在了特定的格式中。</p>
+<p><strong>Gotcha 2：评测时没有按 nanochat 对话格式渲染 prompt</strong>。
+  <code>scripts/chat_eval.py</code> 使用 <code>tokenizer.render_for_completion()</code> 把任务里的 conversation 渲染成 token 序列：包含 BOS、<code>&lt;|user_start|&gt;...&lt;|user_end|&gt;</code> 边界，并在末尾追加 <code>&lt;|assistant_start|&gt;</code> 作为待补全起点。如果你把问题当纯文本直接喂给模型，或忘了追加 <code>&lt;|assistant_start|&gt;</code>，模型会进入“格式分布外”状态，表现断崖式下跌。Chat 能力往往被封印在这种格式对齐里。</p>
 </li>
 <li>
 <p><strong>Gotcha 3：BPB 计算时的对数底数错误（Nats vs Bits）</strong>。
@@ -467,20 +467,21 @@ BPB = 1.0 bits/byte。</p>
 </li>
 <li>
 <p><strong>Gotcha 4：评测生成时的最大长度截断（Max New Tokens 陷阱）</strong>。
-  在进行 ChatCORE 采样时，如果 <code>max_new_tokens</code> 设置得太短（例如默认的 50），对于需要长链条推理的任务（如 GSM8K 或 CoT 任务），模型可能在输出最终答案 <code>&lt;answer&gt;X&lt;/answer&gt;</code> 之前就被引擎强行截断。这会导致正则表达式提取失败，系统将其判为错误（0 分），即使模型的推理过程是完全正确的。务必为推理类评测给予足够的生成长度预算（如 512 或 1024）。</p>
+  在进行 ChatCORE 采样时，如果 <code>max_new_tokens</code> 设置得太短，模型可能在输出关键标记之前就被截断：例如 GSM8K 的评测要在生成文本里找到 <code>####</code> 后的最终数值；HumanEval 需要足够长的代码补全；多选类任务可能需要模型在末尾稳定地产生单个字母（A/B/C/D）。一旦被截断在这些关键位置之前，即使前面的推理过程看起来正确，也会被判错。务必根据任务类型为评测提供足够的生成长度预算（例如 256/512/1024）。</p>
 </li>
 <li>
 <p><strong>Gotcha 5：混淆 Base 评测和 Chat 评测的输入范式</strong>。
   Base 评测（CORE）是计算续写选项的概率，它<strong>不需要</strong>也不应该包含 System Prompt 或对话角色标签；而 Chat 评测（ChatCORE）是要求模型生成答案，它<strong>必须</strong>严格对齐 SFT 阶段的对话格式。混用这两种范式（例如用 Chat 模板去测 Base 模型，或者用纯文本去测 Chat 模型）会导致指标完全失效，让你在排障时南辕北辙。</p>
 </li>
 <li>
-<p><strong>Gotcha 6：Padding Token 参与了 Loss 与 BPB 的计算</strong>。
-  在构建 Batch 数据时，为了对齐张量形状，我们会填充大量的 Padding Token。如果在计算 <code>F.cross_entropy</code> 时没有设置 <code>ignore_index</code>（通常是 Padding Token 的 ID，或 -100），模型会去预测这些无意义的填充符。由于填充符极易预测，这会人为地、大幅度地拉低你的 Loss 和 BPB，制造出一种“模型学得极快”的虚假繁荣。</p>
+<p><strong>Gotcha 6：Padding Token 参与了 Loss 与 BPB 的计算</strong>。</p>
 </li>
+<li><strong>Gotcha 6：Padding/特殊 Token 没有被正确排除，导致指标失真</strong>。
+  在构建 Batch 时，padding token 的 targets 必须被置为忽略值；在 nanochat 里，交叉熵的 <code>ignore_index</code> 约定是 <code>-1</code>。如果你忘了把 padding 对应的 labels 设为 <code>-1</code>，模型会大量学习“预测 padding”，从而出现一种虚假的低 loss。BPB 计算还有第二层保护：<code>evaluate_bpb()</code> 会用 <code>token_bytes</code> 把特殊 token（bytes=0）排除，并忽略所有 <code>&lt;0</code> 的 targets；但如果你的 <code>token_bytes</code> 写错（把特殊 token 设成了非 0 bytes），BPB 也会被系统性污染。</li>
 </ul>
             </article>
             
-            <nav class="page-nav"><a href="chapter6.html" class="nav-link prev">← 第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</a><a href="chapter8.html" class="nav-link next">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成） →</a></nav>
+            <nav class="page-nav"><a href="chapter6.html" class="nav-link prev">← 第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</a><a href="chapter8.html" class="nav-link next">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具） →</a></nav>
         </main>
     </div>
 </body>

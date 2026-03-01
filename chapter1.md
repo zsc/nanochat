@@ -30,12 +30,12 @@ nanochat 的生命周期可以通过一条明确的流水线来描述。这条�
       v
 +-----------------------+     训练     +-----------------------+
 | Tokenizer 训练器      | -----------> | 词表与合并规则 (BPE)  |
-| (统计高频字节对)      |              | (Vocab Size: ~65536)  |
+| (统计高频字节对)      |              | (默认 vocab_size=32768)|
 +-----------------------+              +-----------------------+
-      | (应用分词)
+      |
       v
 预训练语料 Shards (Parquet)
-(每行是一个整数数组: [1024, 56, 899, ...])
+(每行是一个文档字符串；列名通常为 text。tokenization 在 DataLoader 中按需完成)
 
 =========================================================================
 
@@ -58,7 +58,7 @@ Base Checkpoint (仅具备续写能力，无对话礼仪)
 
 [阶段 3: 对齐 (SFT & RL)]
 对话数据集 (JSONL: 包含 System/User/Assistant)
-      | (应用 Chat 模板与 Masking)
+      | (渲染为特殊 token 序列；可选构造监督 mask)
       v
 Batch Tensor: (B, T) + Loss Mask: (B, T) --- 仅在 Assistant 处为 1，其余为 0
       |
@@ -92,32 +92,32 @@ Tokenizer 的好坏直接决定了模型的“阅读速度”。假设一段文�
 $$ C = \frac{N_{\text{bytes}}}{N_{\text{tokens}}} $$
 对于现代中文/英文混合语料，优秀的 BPE Tokenizer 的压缩率 $C$ 通常在 $3.5$ 到 $4.5$ 之间。这意味着模型每处理一个 Token，实际上“消化”了大约 4 个字节的信息。词表越大，压缩率通常越高，但 Embedding 层的参数量也会随之线性增长，容易导致长尾 Token 训练不充分。
 
-在这个阶段，还会定义一些极其重要的特殊 Token（Special Tokens），例如表示文档结束的 `<|endoftext|>`，以及用于对话格式控制的 `<|im_start|>` 和 `<|im_end|>`。
+在这个阶段，还会确立一套“控制面”的特殊 token 体系：nanochat 自训 tokenizer 里用 `<|bos|>` 作为序列边界，并为对话与工具定义了 `<|user_start|>`/`<|user_end|>`、`<|assistant_start|>`/`<|assistant_end|>`、`<|python_start|>`/`<|python_end|>`、`<|output_start|>`/`<|output_end|>` 等标记（集中定义在 `nanochat/tokenizer.py`）。如果你加载的是 GPT-2 等外部 tokenizer，那么历史遗留的 `<|endoftext|>` 往往会被当作 BOS 来兼容。
 
 ### 阶段二：Base 预训练
 
-这是整个流水线中计算量最大、耗时最长的阶段。模型（典型的因果 Transformer 架构，包含旋转位置编码 RoPE、SwiGLU 激活函数和 RMSNorm）在此阶段通过“预测下一个 Token”（Next-Token Prediction）的任务，贪婪地吸收世界知识。
+这是整个流水线中计算量最大、耗时最长的阶段。nanochat 的 Base 模型是因果 Transformer，但它刻意采用了一些“训练/推理都友好”的实现细节：RoPE（旋转位置编码）、QK norm、ReLU$^2$ 的 MLP、无可学习参数的 RMSNorm、value embedding 的门控残差、以及对 logits 做平滑 softcap（避免极端 logits 造成数值不稳）。这些选择的共同目标是：在保持代码可读的前提下，尽可能用更少的工程复杂度换取更稳的训练与更快的推理。
 
 **数学直觉：自回归交叉熵损失**
 在预训练阶段，假设输入序列为 $x = (x_1, x_2, \dots, x_T)$。模型的目标是最大化该序列的联合概率。根据链式法则，这等价于最大化每个位置上“给定历史上下文预测当前 Token”的条件概率之积。在对数空间中，这转化为最小化交叉熵损失（Cross-Entropy Loss）：
 $$ \mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P(x_t \mid x_{<t}; \theta) $$
 其中 $\theta$ 是模型的参数，$x_{<t}$ 表示位置 $t$ 之前的所有 Token。为了防止模型“偷看”未来的信息，Transformer 内部使用了因果掩码（Causal Mask），这是一个下三角矩阵，将注意力矩阵右上角的值设为负无穷大（$-\infty$），使得 Softmax 后的权重为 0。
 
-在这个阶段，数据加载器（Dataloader）会无情地将不同文档拼接在一起（用 `<|endoftext|>` 隔开），然后切分成固定长度 $T$（如 2048 或 4096）的片段喂给模型。这种做法被称为 Packing，它能保证 GPU 的计算矩阵始终是饱满的，从而最大化硬件利用率（MFU）。
+在这个阶段，数据加载器（DataLoader）会把“文档流”装配成固定形状的张量批次。nanochat 的一个代表性做法是 **BOS-aligned packing**：在 tokenization 时为每篇文档显式 prepend 一个 BOS（`<|bos|>`），再用 best-fit 的方式把多篇文档装入长度为 $T{+}1$ 的“行”，最后通过位移得到 inputs/targets（详见 `nanochat/dataloader.py`）。它的工程取舍很明确：尽量做到 **0 padding 的满利用率**，必要时用裁剪换吞吐。
 
 ### 阶段三：对齐（SFT 与 RL）
 
 经过 Base 预训练的模型就像一个博览群书但缺乏社交常识的学者。如果你对它输入“中国的首都是哪里？”，它大概率不会回答“北京”，而是会续写“美国的首都是哪里？英国的首都是哪里？”（因为它在预训练语料中见过很多这样的排比句）。
 
-为了让它变成一个有用的问答助手，我们需要进行监督微调（Supervised Fine-Tuning, SFT）。在这个阶段，数据准备人员需要精心构造对话格式（通常称为 ChatML 格式）。
+为了让它变成一个有用的问答助手，我们需要进行监督微调（Supervised Fine-Tuning, SFT）。在这个阶段，数据准备人员需要精心构造对话的“序列化协议”：谁在说话、边界在哪里、工具调用如何表示、模型何时停止等，都要落到一套可 tokenization 的控制 token 上。
 
 **格式与 Mask 机制示例：**
-一段典型的 SFT 数据在送入模型前，会被拼接成如下形式（以文本表示）：
-`[BOS]<|im_start|>user\n中国的首都是哪里？<|im_end|>\n<|im_start|>assistant\n中国的首都是北京。<|im_end|>[EOS]`
+一段典型的 SFT 对话在送入模型前，会被渲染成“普通文本 token + 控制 token”的交错序列（以概念字符串表示）：
+`<|bos|><|user_start|>中国的首都是哪里？<|user_end|><|assistant_start|>中国的首都是北京。<|assistant_end|>`
 
-在计算损失时，我们引入了一个与输入序列等长的 Mask 向量（通常用 PyTorch 中的 `ignore_index = -100` 来表示不计算损失的位置）。
-- `[BOS]<|im_start|>user\n中国的首都是哪里？<|im_end|>\n<|im_start|>assistant\n` 这一部分的 Mask 值为 0（或 -100）。
-- `中国的首都是北京。<|im_end|>[EOS]` 这一部分的 Mask 值为 1。
+在计算损失时，我们通常会引入一个与序列等长的监督掩码：只让模型在“应该由 assistant 生成的 token”上承担 loss。nanochat 里一个很实用的约定是使用 `ignore_index = -1` 来忽略不参与监督的位置（并在 tokenizer 层提供 `mask` 作为调试/实现依据）。
+- 用户提示与结构 token：掩码为 0（目标标签设为 -1），不计入 loss。
+- assistant 回复的正文与 `<|assistant_end|>`：掩码为 1，计入 loss（也就学会了“何时结束”）。
 
 这样，损失函数变为：
 $$ \mathcal{L}_{\text{SFT}} = -\frac{1}{\sum_{t} m_t} \sum_{t=1}^{T} m_t \log P(x_t \mid x_{<t}; \theta) $$
@@ -158,7 +158,7 @@ $$ \text{BPB} = \frac{\mathcal{L}}{\ln(2) \cdot C} $$
 
 **法则 4：数据准备的第一性原理**
 训练细节再漂亮，也会被数据噪声淹没（Garbage in, garbage out）。数据准备必须遵循三个不可妥协的原则：
-- **格式绝对一致**：SFT 阶段的 ChatML 拼接逻辑必须与推理引擎中的 Prompt 渲染逻辑在字节级别完全一致。多一个空格或少一个换行，都可能导致模型性能断崖式下跌。
+- **格式绝对一致**：SFT 阶段的对话序列化协议必须与推理引擎（如 `scripts/chat_cli.py`、`scripts/chat_web.py`）在字节级别一致。一个常见的“稳定锚点”是：每轮 user 都用 `<|user_start|>...<|user_end|>` 包裹，每轮 assistant 都用 `<|assistant_start|>...<|assistant_end|>` 包裹；工具调用只允许出现在 `<|python_start|>...<|python_end|>` 内，并由 Engine 在 `<|output_start|>...<|output_end|>` 段强制注入结果。多一个空格或少一个边界 token，都可能让模型进入分布外模式，表现断崖式下跌。
 - **可复现的 Shuffle**：数据集的打乱必须依赖固定的全局随机种子（Seed）。否则，当你中断并恢复训练时，模型可能会重复看到相同的数据，导致过拟合。
 - **可解释的 Packing 与 Mask**：确保你知道每一个 Batch 中有多少比例的 Token 是被 Mask 掉的（即不参与 Loss 计算）。如果 Mask 比例过高，说明你的数据利用率极低。
 
@@ -194,7 +194,7 @@ $$ \mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P(x_t \mid x_{<t}; \theta) $$
 3. **长尾问题**：词表过大可能导致某些罕见 Token 在训练语料中出现次数极少，其对应的 Embedding 向量无法得到充分更新（训练不充分）。
 </details>
 
-**3. （基础题）在 SFT（监督微调）阶段，为什么必须引入 Mask 机制（如设置 `ignore_index = -100`）？**
+**3. （基础题）在 SFT（监督微调）阶段，为什么必须引入 Mask 机制（如设置 `ignore_index = -1`）？**
 - Hint：在一段包含“系统提示”、“用户提问”和“助手回答”的完整对话序列中，模型应该对哪部分的生成负责？如果不对用户提问进行 Mask 会发生什么？
 <details>
 <summary>查看答案</summary>
@@ -217,7 +217,7 @@ $$ \text{BPB} = \frac{\mathcal{L}}{\ln(2) \cdot C} $$
 <details>
 <summary>查看答案</summary>
 可能的问题排查方向：
-1. **ChatML 格式不一致**：SFT 训练时拼接的特殊 Token（如 `<|im_start|>`、换行符）与评测/推理时构建 Prompt 的逻辑不一致。模型看到了它在 SFT 阶段从未见过的序列模式。
+1. **对话协议不一致**：SFT 训练时使用的边界 token（如 `<|user_start|>`/`<|user_end|>`、`<|assistant_start|>`/`<|assistant_end|>`）与评测/推理时构建 prompt 的逻辑不一致。模型看到了它在 SFT 阶段从未见过的序列模式，能力会被“封印”在训练时的格式里。
 2. **Mask 逻辑写反或错位**：不小心把“助手回答”给 Mask 掉了，反而让模型去学习“用户提问”，导致模型根本没有学到如何输出答案；或者 Mask 数组与 Token 数组发生了 $+1$ 或 $-1$ 的错位。
 3. **学习率过大导致灾难性遗忘**：SFT 阶段的学习率通常应该比预训练阶段小 1 到 2 个数量级。如果学习率过大，会破坏 Base 模型已经学好的底层语言表示，导致模型崩溃（输出乱码）。
 4. **SFT 数据质量极差或未洗牌**：数据中包含大量无意义的重复字符，或者数据未 Shuffle 导致模型在一个 Batch 内只看到同一种极其特殊的对话模式而严重过拟合。

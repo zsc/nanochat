@@ -1,391 +1,330 @@
-# 第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）
+# 第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）
 
-经过前面章节的预训练、指令微调（SFT）和强化学习（RL），我们已经得到了一个具备对话能力和指令遵循能力的模型权重。然而，对于最终用户或下游评测系统而言，模型本身仅仅是一个静态的参数文件（Checkpoint）和一份词表（Tokenizer）。本章将探讨如何将“能训”的静态模型转化为“能聊”的动态系统。
+训练完一个 checkpoint，只意味着你得到了“一个能算 logits 的函数”。要把它变成“能聊的系统”，你还需要推理引擎：把 token 序列送进模型、把下一 token 从分布里采出来、维护 KV cache 降低解码成本、在合适的边界停止、以及（如果有工具）把模型输出与外部执行结果拼成一个一致的上下文。
 
-在 nanochat 的设计哲学中，推理流水线（Inference Pipeline）被设计为最小化且高度透明的。我们不依赖庞大的第三方推理框架（如 vLLM 或 TGI），而是用最基础的 PyTorch 张量操作从零构建一个推理引擎（Engine）。这不仅是为了教学目的，更是为了让数据准备人员和模型训练人员能够彻底看清：数据在进入模型前到底经历了什么格式化，模型吐出的 Logits 是如何变成文字的，以及特殊 Token 是如何控制整个系统流转的。
-
-本章将深入拆解自回归生成的引擎核心、用于加速的 KV Cache 机制、工具调用的状态机流转，以及如何通过命令行（CLI）和 Web 界面与模型进行交互。
+nanochat 的推理链路有一个很强的工程特点：它尽量不引入庞大的第三方推理框架，而是把关键逻辑写成一套透明的最小实现（`nanochat/engine.py` + `scripts/chat_cli.py` + `scripts/chat_web.py`）。这对模型训练/数据准备人员的价值在于：你可以把“训练时看到的 token 分布”与“推理时喂入的 token 序列”逐项对齐，避免那类“只差一个空格就全盘崩掉”的分布偏移。
 
 ---
 
-## 10.1 自回归生成与 KV Cache 机制
+## 10.1 Engine：token in / token out（prefill + decode + KV cache）
 
-大语言模型的推理本质上是一个自回归（Autoregressive）过程：给定一段前缀（Prompt），模型预测下一个 Token，然后将该 Token 拼接到输入序列中，再次预测下一个 Token，如此循环，直到生成停止符或达到最大长度。
+### 10.1.1 Engine 的边界：它只理解 token id
 
-### 10.1.1 Prefill 与 Decode 阶段
+`Engine` 的输入是“token id 列表”，输出是“下一 token id”。它不做文本模板渲染；对话边界 token（例如 `<|user_start|>`）由上层（CLI/Web/评测脚本）负责拼好。唯一的例外是：为了工具调用，它会持有 tokenizer（仅用于把工具表达式 token 解码成字符串、把工具结果再编码回 token）。
 
-在实际的推理引擎中，这个自回归过程被严格划分为两个阶段：
-1. **Prefill（预填充）阶段**：用户一次性输入了一段较长的 Prompt（包含 System Prompt、历史对话和当前问题）。引擎将这段 Prompt 一次性送入模型，并行计算所有 Token 的特征，并生成第一个输出 Token。这个阶段计算密集，受限于算力（Compute-bound）。
-2. **Decode（解码）阶段**：引擎拿到上一步生成的单个 Token，将其送入模型，仅计算这一个 Token 的特征，从而生成下一个 Token。这个阶段访存密集，受限于显存带宽（Memory-bound）。
+### 10.1.2 Prefill 与 Decode：为什么要“prefill 一次、再用 cache 解码”
 
-### 10.1.2 为什么需要 KV Cache？
+自回归生成可以分成两段：
 
-如果不做任何优化，在 Decode 阶段，每次预测下一个 Token 时，模型都需要对整个历史序列重新计算注意力（Attention）。
+1. **Prefill**：把整个 prompt（长度通常很长）一次性送入模型，建立起 KV cache，并得到第一步的 logits。
+2. **Decode**：每次只喂一个新 token，在 KV cache 上增量计算下一 token 的 logits。
 
-标准的注意力机制公式为：
-$$ Attention(Q, K, V) = softmax\left(\frac{Q K^T}{\sqrt{d_k}}\right) V $$
+如果每一步都把“全历史”重新前向一遍，你会得到 $O(T^2)$ 的总成本；KV cache 的意义就是把它降到“每步近似 $O(T)$ 的注意力访存 + 常数级的前向”，从而让长对话可用。
 
-假设当前序列长度为 $t$，在预测第 $t+1$ 个 Token 时，我们需要计算第 $t$ 个 Token 的 Query（记为 $q_t$）与所有历史 Token 的 Key（记为 $k_1, k_2, \dots, k_t$）的点积。
-随着序列长度 $T$ 的增加，如果不加缓存，计算量将呈 $O(T^2)$ 增长，这在长对话中是不可接受的。
+### 10.1.3 KVCache 的形状：为 FA3 设计的布局（与很多实现不同）
 
-仔细观察注意力机制的因果掩码（Causal Mask）特性会发现：第 $i$ 个 Token 的 Key 和 Value 一旦计算出来，在后续生成任何 Token 时，它们的值都不会再改变。因此，我们完全可以将它们缓存下来。这就是 KV Cache 的核心思想。
+nanochat 的 `KVCache` 明确是为 FlashAttention 3 的 `flash_attn_with_kvcache` API 设计的。它的关键特征是：
 
-```text
-================================================================================
-[无 KV Cache 的朴素生成：存在大量冗余计算]
-Step 1: 输入 [A, B]       -> 计算 Attention(A, B)       -> 输出 C
-Step 2: 输入 [A, B, C]    -> 计算 Attention(A, B, C)    -> 输出 D
-Step 3: 输入 [A, B, C, D] -> 计算 Attention(A, B, C, D) -> 输出 E
-(注意：Step 3 中，A、B、C 的 K 和 V 被重新计算了一遍)
+- cache 的 head 维度布局是 **(B, T, H, D)**，而不是很多旧实现常见的 (B, H, T, D)
+- cache 在推理时会被 in-place 更新
+- 当前位置由 `cache_seqlens`（int32）追踪
 
-================================================================================
-[使用 KV Cache 的高效生成：空间换时间]
-显存中预先分配一块大张量作为 KV Cache: Shape = (Batch, Max_Seq_Len, Num_Heads, Head_Dim)
+在工程上，这会影响你做显存估算与并发控制的方式：并发样本数 `B` 与上下文长度 `T` 都会线性放大 KV cache 的显存。
 
-[Prefill 阶段]
-输入 [A, B] 
--> 计算 K_{A,B}, V_{A,B} 
--> 存入缓存槽位 [0:2] 
--> 计算 Attention -> 输出 C
+### 10.1.4 一个很实用的优化：先 batch=1 prefill，再复制 cache
 
-[Decode 阶段]
-Step 1: 
-输入 [C] (形状为 Bx1)
--> 仅计算 C 的 K_{C}, V_{C} 
--> 追加到缓存槽位 [2:3]，此时缓存为 [K_{A,B,C}, V_{A,B,C}]
--> 仅使用 C 的 Query(C) 与 缓存的 K,V 计算 Attention 
--> 输出 D
+`Engine.generate()` 的一个“很 nanochat”的技巧是：
 
-Step 2: 
-输入 [D] (形状为 Bx1)
--> 仅计算 D 的 K_{D}, V_{D} 
--> 追加到缓存槽位 [3:4]，此时缓存为 [K_{A,B,C,D}, V_{A,B,C,D}]
--> 仅使用 D 的 Query(D) 与 缓存的 K,V 计算 Attention 
--> 输出 E
-================================================================================
-```
+- 先对 prompt 做 **batch=1** 的 prefill（只算一次）
+- 再把 KV cache 复制成 `num_samples` 份，让后续 decode 可以并行生成多个样本
 
-通过 KV Cache，每一步 Decode 的计算复杂度从 $O(T^2)$ 降到了 $O(T)$，极大地提升了吞吐量。在 nanochat 的 Engine 实现中，KV Cache 通常被预先分配为一块连续的显存张量，以避免生成过程中频繁的内存分配开销和显存碎片化。
+这非常适合“同一 prompt 采样多条回答”（评测、RL、或 UI 的多样化采样），并且能避免重复计算 prompt 的前向。
 
-**Rule-of-thumb（经验法则）：**
-在单机推理时，显存的占用主要由两部分构成：模型权重（静态）和 KV Cache（动态）。如果你的模型加载后还剩 8GB 显存，你需要根据公式 $2 \times \text{Layers} \times \text{Max\_Seq\_Len} \times \text{Hidden\_Dim} \times \text{Batch\_Size}$ 来反推你最大能支持的并发数和上下文长度，否则在 Decode 阶段必定遭遇 OOM（Out of Memory）。
+### 10.1.5 停止条件：`<|assistant_end|>` 或 BOS
 
----
+nanochat 的 Engine 在生成循环中把两类 token 视为“终止”：
 
-## 10.2 采样策略与温度控制
+- `<|assistant_end|>`：对话回复结束（SFT 会教模型学会输出它）
+- BOS：如果模型生成了 BOS，也会被视为结束（作为一种兜底）
 
-模型最后一个线性层（LM Head）输出的并不是直接的文本，而是一个形状为 `(Batch_Size, Vocab_Size)` 的对数几率（Logits）张量。我们需要通过采样策略将这些连续的浮点数转化为离散的 Token ID。
+`Engine.generate_batch()` 返回的结果会**剔除终止 token**（终止 token 不会被加入最终序列），这对下游评测和 RL 的 padding/mask 处理很方便。
 
-### 10.2.1 温度控制（Temperature）
+### 10.1.6 一个直接影响 OOM 的细节：decode cache 会按 `len(prompt)+max_tokens` 预分配
 
-最基础的转换是 Softmax 函数，它将 Logits 转化为概率分布。为了控制生成的多样性，我们引入了温度参数（Temperature，记为 $T$）。带有温度控制的概率分布公式如下：
+Engine 在 decode 阶段会创建一个“大 KV cache”，其长度 hint 大致是：
 
-$$ P(x_i) = \frac{\exp(z_i / T)}{\sum_{j=1}^{|V|} \exp(z_j / T)} $$
+$$L_{\text{cache}} \approx L_{\text{prompt}} + L_{\text{gen}}$$
 
-其中 $z_i$ 是第 $i$ 个 Token 的 Logit 值，$|V|$ 是词表大小。
+其中 $L_{\text{gen}}$ 在实现里通常来自 `max_tokens`。这意味着：`max_tokens` 不仅决定“最多生成多长”，也决定“你为 KV cache 预留多少显存”。即便模型很早就输出了 `<|assistant_end|>` 停止，cache 也已经分配完了。
 
-温度 $T$ 是一个极其关键的超参数：
-- **当 $T = 1.0$ 时**，等价于标准的 Softmax，反映了模型训练时的原始概率分布。
-- **当 $T \to 0$ 时**（通常在代码中实现为直接取 `argmax`），概率分布趋于集中在最大 Logit 对应的 Token 上。这被称为贪婪搜索（Greedy Decoding）。贪婪搜索的输出最稳定，但也最容易陷入“复读机”式的重复循环，缺乏创造力。
-- **当 $T > 1.0$ 时**（例如 $T = 1.5$），指数项的作用被削弱，概率分布变得更加平缓（Flattened）。原本概率极低的 Token 现在也有了被选中的机会，这极大增加了生成的多样性，但也容易导致模型输出不连贯的乱码（幻觉）。
+因此在工程上，`max_tokens` 是推理 OOM 的一线旋钮（与并发样本数一起决定 KV cache 体积）。粗略估算你可以记住：
 
-```text
-[不同温度下的概率分布示意图]
+$$M_{\text{KV}} \propto 2 \times n_{\text{layer}} \times B \times L_{\text{cache}} \times n_{\text{kv\_head}} \times d_{\text{head}}$$
 
-Logits: [10.0, 8.0, 5.0, 1.0] (对应 Token: A, B, C, D)
+最前面的 2 来自 K 与 V 两套缓存。这个估算不要求精确，但足以用来解释“为什么并发一上来就炸”。
 
-T = 0.1 (极低温度，尖锐化)
-P(x) |
- 1.0 |  * (A: ~99.99%)
-     |
-     |
- 0.0 |____*____*____*____
-       A    B    C    D
+### 10.1.7 `token_masks`：把“模型采样”与“系统强制注入”区分开
 
-T = 1.0 (标准温度)
-P(x) |
- 0.8 |  * (A: ~88%)
-     |
- 0.1 |       * (B: ~11%)
- 0.0 |_________*____*____
-       A    B    C    D
+nanochat 的 `Engine.generate()` 不只是逐步吐出 token id，它还会在同一列返回一个 `token_masks`：对 batch 内每一行给出 0/1 标记，表示该 token **是模型采样出来的（1）**，还是 **系统强制注入的（0）**。
 
-T = 5.0 (极高温度，平缓化)
-P(x) |
- 0.4 |  *    * 
- 0.2 |            *
- 0.0 |________________*__
-       A    B    C    D
-```
+这件事看起来像“额外的工程细节”，但它会在两个地方变成你排障与训练对齐的关键证据链：
 
-### 10.2.2 截断策略：Top-K 与 Top-p
+- **工具调用**：当模型触发 `<|python_start|>...<|python_end|>` 后，`<|output_start|>...<|output_end|>` 是系统注入的，必须是 mask=0（否则你会把“环境返回的答案”错当成模型该预测的 token）。
+- **RL/评测的 loss 对齐**：RL 里常常要把 prompt token（以及 forced token）从 loss 里剔除。`token_masks` 给你一个“推理侧事实”，能把这类对齐从“靠约定”变成“可验证”。
 
-仅仅调整温度是不够的，因为词表中往往包含数万个 Token，长尾部分充满了完全不合逻辑的词汇。为了防止模型在采样时“抽风”选中这些长尾 Token，我们需要截断策略。
+如果你用的是 `Engine.generate_batch()`（非流式、一次性返回最终序列），它也会同时返回 `masks`：prompt 部分通常被标记为 0，生成出来的部分再按采样/强制注入标记为 1/0，并且终止 token（`<|assistant_end|>` 或 BOS）会被剔除不出现在结果里。
 
-**Top-K 采样**：
-在每一步中，只保留概率最高的 $K$ 个 Token，将它们的概率重新归一化，其余 Token 的概率强制设为 0。这种方法简单粗暴，但存在缺陷：在分布非常平缓时，$K$ 个 Token 可能不足以涵盖所有合理的选择；而在分布非常尖锐时，$K$ 个 Token 又可能包含太多不合理的选择。
+### 10.1.8 一个容易踩的实现约束：KV cache dtype 的“仓库级假设”
 
-**Top-p 采样（核采样，Nucleus Sampling）**：
-Top-p 是一种动态截断策略。我们将所有 Token 按概率从大到小排序，然后按顺序累加概率，直到累加和首次超过阈值 $p$（例如 $p=0.9$）。此时，我们只在这个累加集合（称为“核”）中进行采样。
+`Engine.generate()` 里有一个直白但也很“硬”的实现假设：**CUDA 上 KV cache 用 BF16，非 CUDA 用 FP32**。它之所以这么写，是因为 KV cache 需要在生成前就预分配，而 `Engine` 本身并没有一套独立的“device/dtype 配置传递”机制。
 
-数学定义为，寻找最小的词汇子集 $V^{(p)} \subset V$，使得：
-$$ \sum_{x \in V^{(p)}} P(x) \ge p $$
-
-Top-p 能够根据当前概率分布的形状动态调整保留的 Token 数量：当模型非常确信时（分布尖锐），保留的 Token 很少；当模型不确信时（分布平缓），保留的 Token 较多。nanochat 默认推荐使用 Top-p 采样。
-
-**Rule-of-thumb（经验法则）：**
-在代码补全或数学推理任务中，需要极高的逻辑严密性，建议设置 $T=0.1$ 或直接使用贪婪搜索；在日常闲聊或创意写作任务中，建议设置 $T=0.7$ 且 $p=0.95$，以获得既连贯又丰富的输出。永远不要同时使用极高的温度和极大的 Top-p 值。
+这意味着：如果你改了推理端的 dtype 策略（例如在 CUDA 上强制用 FP32），或者你在同一仓库里引入了更复杂的混合精度/量化推理，**要记得同步 KV cache 的 dtype 选择**，否则会出现“能跑但慢/不稳”或“直接 dtype 报错”的非直观问题。
 
 ---
 
-## 10.3 工具调用（Tool Calling）的状态机
+## 10.2 采样：只有 `temperature` 与 `top_k`（没有 top-p）
 
-现代 Chat 模型（尤其是经过 SFT 和 RL 微调的模型）通常具备调用外部工具（如计算器、搜索引擎、数据库查询）的能力。在 nanochat 中，工具调用不是通过复杂的外部启发式规则（如正则表达式硬匹配）实现的，而是完全融入了自回归生成的生命周期中，表现为一个由特殊 Token（Special Tokens）驱动的有限状态机（Finite State Machine, FSM）。
+在 nanochat 的采样实现里，核心只有两个旋钮：
 
-### 10.3.1 格式约定与特殊 Token
+1. **温度（temperature）**：$T=0$ 时贪心解码；$T>0$ 时做随机采样。
+2. **Top-k 截断（top_k）**：只在概率最高的 K 个 token 内采样；`top_k=0` 表示不截断、在全词表采样。
 
-为了让模型知道何时调用工具、何时停止，我们定义了一套严格的 ChatML 扩展格式。假设我们有以下特殊 Token：
-- `<|im_start|>`：消息块的开始
-- `<|im_end|>`：消息块的结束
-- `<|tool_call|>`：模型决定调用工具的标志
-- `<|tool_result|>`：外部系统向模型注入工具执行结果的标志
+实现上非常直白：
 
-### 10.3.2 状态机流转图
+- `temperature==0`：直接 argmax（确定性）
+- `temperature>0 且 top_k>0`：取 top-k logits，softmax 后 multinomial
+- `temperature>0 且 top_k<=0`：全词表 softmax 后 multinomial
 
-当用户输入包含工具描述时，Engine 内部维护着一个状态变量。以下是完整的状态流转过程：
+**Rule-of-thumb：**
 
-```text
-================================================================================
-           [nanochat 工具调用状态机 (Tool Calling FSM)]
-
-[状态: WAIT_FOR_USER]
-       │
-       ▼ 用户输入包含工具定义的 Prompt
-[状态: PREFILL] ────────► 将 Prompt 编码并送入模型计算 KV Cache
-       │
-       ▼
-[状态: GENERATING] ◄─────────────────────────────────────────┐
-       │                                                     │
-       ▼                                                     │
-  模型自回归生成下一个 Token                                 │
-       │                                                     │
-       ├─► 如果是普通文本 Token ─► 追加到输出缓冲区，继续 ───┤
-       │                                                     │
-       ├─► 如果是 <|tool_call|> Token                        │
-       │          │                                          │
-       │          ▼                                          │
-       │   [状态: PAUSED_FOR_TOOL]                           │
-       │          │                                          │
-       │          ▼                                          │
-       │   模型继续生成工具的 JSON 参数，直到遇到 <|im_end|>│
-       │          │                                          │
-       │          ▼                                          │
-       │   Engine 拦截输出，解析 JSON 并执行本地 Python 函数 │
-       │          │                                          │
-       │          ▼                                          │
-       │   将函数返回值包装为:                               │
-       │   <|im_start|>tool_result\n{...}<|im_end|>          │
-       │          │                                          │
-       │          ▼                                          │
-       │   将包装后的结果 Tokenize，并作为强制输入送入模型   │
-       │          │                                          │
-       │          ▼                                          │
-       │   (状态恢复至 GENERATING) ──────────────────────────┘
-       │
-       └─► 如果是 <|im_end|> 且非工具调用 ─► (对话轮次结束)
-                                             │
-           ┌─────────────────────────────────┘
-           │
-           ▼
-[状态: WAIT_FOR_USER] 等待用户的下一轮输入
-================================================================================
-```
-
-在这个状态机中，数据准备人员和推理侧工程师必须达成绝对的共识：**SFT 阶段构造的工具调用轨迹，必须与推理时 Engine 注入的特殊 Token 格式保持像素级（字节级）的一致。**
-
-例如，如果在 SFT 数据中，`<|tool_call|>` 后面紧跟了一个换行符 `\n`，那么在推理时，Engine 解析 JSON 的逻辑就必须考虑到这个换行符；如果外部注入的 `<|tool_result|>` 缺少了闭合的 `<|im_end|>`，模型就会陷入困惑，试图自己去补全工具的输出，而不是基于工具结果进行总结。
-
-**Rule-of-thumb（经验法则）：**
-调试工具调用失败的第一步，永远是把 Engine 实际喂给模型的完整字符串（Decode 后的纯文本，包含所有特殊 Token）打印出来，并与 SFT 训练集中的一条样本放到文本比对工具（Diff Tool）中逐个字符对比。90% 的工具调用失败都是因为多了一个空格或少了一个换行。
+- **评测时**：设 `temperature=0`（确定性，上界测量）。
+- **聊天时**：设 `temperature≈0.6~0.8`，`top_k≈50`（nanochat CLI/Web 默认就接近这套）。
+- **写代码/数学推导时**：降低温度（例如 `0.0~0.2`），必要时降低 `top_k`，减少随机性。
 
 ---
 
-## 10.4 命令行与 Web 交互界面
+## 10.3 工具调用：`<|python_start|>...<|python_end|>` + 强制注入 `<|output_start|>...<|output_end|>`
 
-为了让模型真正“可用”并提供良好的用户体验，nanochat 提供了两种开箱即用的交互界面：`scripts/chat_cli.py` 和 `scripts/chat_web.py`。它们是 Engine 的外壳，负责处理 I/O、流式传输和多轮对话的上下文管理。
+很多人把“工具调用”想成复杂的 JSON schema、函数签名、甚至多轮协议；nanochat 的工具调用更像一个非常明确的 token 级状态机：模型只需要学会在合适的时候输出一段被 `<|python_start|>` 与 `<|python_end|>` 包裹的表达式，剩下的由引擎接管。
 
-### 10.4.1 命令行界面（CLI）与流式输出
+### 10.3.1 引擎状态机：forced token 的关键语义
 
-CLI 是最轻量级的调试工具，非常适合在无图形界面的 GPU 服务器上快速验证模型。CLI 的核心难点在于如何优雅地处理流式输出（Streaming）。
+Engine 在每条样本（row）上维护一个 RowState：
 
-在自回归生成中，模型是一个一个 Token 吐出结果的。如果等整句话生成完再打印，用户会感到明显的卡顿（即首字延迟 TTFT 过高）。因此，我们需要在 Engine 每生成一个 Token 时，立即将其解码并打印到终端。
+- `in_python_block`：是否处于 python 段内
+- `python_expr_tokens`：当前表达式的 token 缓冲
+- `forced_tokens`：一个队列，表示“接下来必须注入”的 token（mask=0）
 
-然而，Token 并不总是对应完整的字符。例如，在 UTF-8 编码中，一个中文字符可能被切分成 3 个 Byte Token。如果模型刚吐出前 2 个 Byte Token，此时调用 Tokenizer 的 Decode 会得到乱码（通常显示为 ``）。
-nanochat 的 CLI 实现中，采用了一个带缓冲区的流式解码器（Streaming Decoder）：它会暂存无法构成完整 Unicode 字符的残缺字节，直到接收到后续 Token 拼凑成完整字符后，再将其刷新（Flush）到终端。
+当模型生成 `<|python_end|>` 时，引擎会把表达式 token 解码成字符串，调用内部的 “calculator” 执行；若得到结果，则把：
 
-### 10.4.2 Web 界面与 Server-Sent Events (SSE)
+`<|output_start|> + (结果的 token) + <|output_end|>`
 
-对于面向普通用户的展示，Web 界面是必不可少的。`chat_web.py` 通过一个极简的 HTTP 服务器将 Engine 包装为 API 服务。
+压入 `forced_tokens` 队列。之后的若干步，引擎会优先从队列里吐出 forced token（即使模型当步采样出了别的 token，也会被覆盖），并在输出的 `token_masks` 里标记这些 forced token 的 mask=0。
 
-在 Web 场景下实现打字机效果，传统的 HTTP 请求-响应模型是不适用的。如果前端使用轮询（Polling）不断询问后端是否有新 Token，会产生巨大的网络开销。nanochat 采用了 Server-Sent Events (SSE) 协议。
+这套 mask 对训练/评估很关键：RL 脚本正是用它把工具注入 token 从 loss 里剔除（见第 9 章）。
 
-SSE 是一种基于 HTTP 的单向长连接技术。客户端发起请求后，服务器保持连接不断开，并通过 `Transfer-Encoding: chunked` 将生成的 Token 逐个作为事件流推送到前端。前端页面（`ui.html`）通过 JavaScript 的 `EventSource` API 接收这些事件，并动态更新 DOM，从而实现平滑的流式打字机效果。
+### 10.3.2 “python”其实是安全计算器：它能做什么、不能做什么
 
-### 10.4.3 多轮对话的上下文截断（Context Truncation）
+`use_calculator()` 的设计目标不是“执行任意 Python”，而是给 GSM8K 这类任务一个安全的算术工具：
 
-无论是 CLI 还是 Web UI，都需要维护一个对话历史列表（History）。随着对话轮数的增加，历史记录的 Token 总数迟早会超过模型支持的最大上下文窗口（Max Context Length，例如 4096 或 8192）。一旦越界，模型将无法处理，直接报错。
+- 允许纯算术表达式（并去掉数字中的逗号）
+- 禁止 `**` 幂运算（以及一系列危险模式）
+- 额外允许非常有限的字符串操作（目前只放开 `.count()`）
+- 用 `signal.alarm` 做超时，避免卡死
 
-此时必须引入上下文截断策略。最简单的策略是直接丢弃最旧的对话轮次。但是，这会引发一个致命问题：**System Prompt 的丢失**。System Prompt 通常位于对话的最开头，包含了模型的人设、核心指令和可用工具列表。如果它被截断，模型会瞬间“失忆”，变成一个毫无约束的通用补全模型。
+因此当你在数据里用 `<|python_start|>` 包裹表达式时，请把它当成“计算器调用”，而不是“任意代码执行”。真正的代码执行沙箱在 HumanEval 评测里由 `nanochat/execution.py` 负责（见 10.6）。
 
-nanochat 采用的是**保留头部的滑动窗口策略**：
+**Rule-of-thumb：** 工具系统最常见的失败原因不是“模型不会算”，而是“格式不对齐”：训练数据与推理引擎在空格/换行/边界 token 上出现字节级偏移。排障时优先对齐 token 序列，而不是凭感觉调温度。
+
+---
+
+## 10.4 CLI：`chat_cli.py` 的最小交互闭环
+
+CLI 是最轻量的调试入口，适合在无 UI 的 GPU 机器上快速验证：
+
+- 对话上下文是一个 `conversation_tokens` 列表，起始是 BOS
+- 每轮用户输入会被包裹进 `<|user_start|>...<|user_end|>`
+- 引擎端追加 `<|assistant_start|>` 并开始生成
+- 生成结束后，如果没有自然生成 `<|assistant_end|>`（例如被 `max_tokens` 截断），CLI 会手动补一个 `<|assistant_end|>`，保证上下文闭合
+
+与 Web 版不同，CLI 会每步直接 `decode([token])` 然后打印，因此：
+
+- 如果 tokenizer 的 decode 在某些 token 上会产生替换字符 `�`（不完整 UTF-8），CLI 可能会短暂输出乱码；
+- 如果模型真的把特殊 token 当文本输出，CLI 也可能把它打印出来（Web 版会过滤终止 token，并有 UTF-8 拼接保护）。
+
+把 CLI 当成“对齐工具”而不是“最终产品”：它最适合用来观察模型是否会输出 `<|assistant_end|>`、是否能触发 `<|python_start|>` 工具段、以及采样参数变化的即时效果。
+
+---
+
+## 10.5 Web：`chat_web.py` 的 worker pool、SSE 流式输出与 UTF-8 防抖
+
+### 10.5.1 多 GPU worker pool：每张卡一份模型副本
+
+`chat_web.py` 的并发策略是数据并行：每个 GPU 上加载一份完整模型，形成一个 WorkerPool：
+
+- `available_workers` 是一个 `asyncio.Queue`
+- 请求到来时 acquire 一个 worker，生成结束后 release 回队列
+- 多 GPU 只在 CUDA 下启用（脚本会断言）
+
+这套结构对训练/数据人员也有启发：它把“并发”与“模型状态”隔离得很干净——每个 worker 的 engine/tokenizer 都是独立的，不会互相污染 KV cache。
+
+### 10.5.2 输入协议：Web 只支持 `user`/`assistant` 两种 role
+
+Web 请求的 `messages` 会被转换成 token 序列：
+
+- user：`<|user_start|> content <|user_end|>`
+- assistant：`<|assistant_start|> content <|assistant_end|>`
+- 最后追加一个 `<|assistant_start|>` 作为待生成起点
+
+注意：当前 Web 实现并不接收 `system` role（虽然错误提示文本里可能会写到 system），如果你需要 system 指令，请在上层把它合并进第一条 user（这与 tokenizer 的 system 合并策略一致，见第 8 章）。
+
+### 10.5.3 SSE 流式输出：为什么要检查 `�`
+
+Web 端采用 Server-Sent Events（SSE）做流式输出。一个非常“细但值钱”的实现细节是：它不会把每个 token decode 后立刻发给前端，而是维护一个 `accumulated_tokens` 列表，每步都 decode 全部累计 token，并只在 decode 结果**不以替换字符 `�` 结尾**时才发送增量文本。
+
+其动机很简单：某些 tokenizer 的 token 边界可能落在 UTF-8 的多字节字符中间，如果你在中间态把字符串发出去，前端就会看到乱码闪烁。用“累计 decode + `�` 检查”可以用很小的代价换来稳定的流式体验（decode 在这里更接近查表 + 拼接，成本相对可控）。
+
+### 10.5.4 滥用防护：长度与采样参数的 clamp
+
+为了避免有人用极端输入拖垮服务端，Web 实现对请求做了限制：
+
+- **消息条数**：最多 `500` 条
+- **单条消息长度**：最多 `8000` 字符
+- **对话总长度**：最多 `32000` 字符（按所有 message 的字符数相加）
+- **采样参数范围**：
+  - `temperature ∈ [0.0, 2.0]`
+  - `top_k ∈ [0, 200]`（`0` 表示“不做 top-k 截断”，在全词表采样）
+  - `max_tokens ∈ [1, 4096]`
+
+实现上这里更准确的说法是“**校验并拒绝**”而不是“clamp”：参数不在范围内会直接返回 400。另一个有趣的小细节是：role 校验只允许 `user/assistant`，但错误提示文本里会写到 `system`（这和实际行为不一致），所以你在对接时要以实现为准。
+
+这些限制同样适用于你在内部部署时的“健康默认值”：先保证服务稳定，再谈能力上限。但也要意识到：这里限制的是**字符数**而不是 token 数——在某些 tokenizer/语言分布下，字符数并不能可靠约束 token 数；如果你需要更强的资源控制，最好把“prompt token 上限”也纳入协议。
+
+### 10.5.5 SSE 的 payload 约定：每个 chunk 是一条 `data: ...`
+
+在 `text/event-stream` 的 SSE 协议里，nanochat Web 端每次输出一段文本增量，就会产生一条形如 `data: ...` 的事件行，并以空行结束。payload 是 JSON：
+
+- 增量输出：`{"token": "<新增文本>", "gpu": <gpu_id>}`
+- 流结束：`{"done": true}`
+
+一个简化的示例如下：
 
 ```text
-[上下文截断策略示意图 (最大长度: 4096 tokens)]
+data: {"token":"你好","gpu":0}
 
-原始对话历史:
-[System Prompt] (500 tokens) <--- 必须永远保留
-[User 轮次 1] (200 tokens)   <--- 最旧的对话，优先被丢弃
-[Asst 轮次 1] (300 tokens)   <--- 优先被丢弃
-[User 轮次 2] (150 tokens)
-[Asst 轮次 2] (400 tokens)
-...
-[User 轮次 N] (当前问题, 100 tokens)
+data: {"token":"，我能帮你什么？","gpu":0}
 
-截断过程:
-1. 计算总长度: 500 + 200 + 300 + 150 + 400 + ... + 100 = 5200 tokens (> 4096)
-2. 锁定 System Prompt (500 tokens)。剩余可用配额 = 4096 - 500 = 3596 tokens。
-3. 从后往前累加对话轮次，直到接近 3596 tokens。
-4. 丢弃前面的 [User 轮次 1] 和 [Asst 轮次 1]。
-5. 重新拼接: [System Prompt] + [User 轮次 2] + [Asst 轮次 2] + ... + [User 轮次 N]
+data: {"done": true}
 ```
 
-通过这种策略，模型始终记得自己是谁，同时能够参考最近几轮的上下文进行回复。
+注意实现里用了 `ensure_ascii=False`，因此中文不会被转义成 `\\u4f60\\u597d` 这种形式；再配合上一节的 UTF-8 “`�` 防抖”，前端体验会稳定很多。
+
+### 10.5.6 “流式优先”的工程含义：API 只有 streaming
+
+当前 `/chat/completions` 端点只提供 streaming 形态：服务端边生成边推送，直到发出 `{"done": true}`。这会影响你做离线评测/批处理的方式：如果你想要“非流式一次性返回”，要么在客户端把 stream 消费并拼接，要么你需要在服务端加一个“收集完整文本再返回”的分支（同时仍要记得在 `finally` 中 release worker，避免 worker 泄漏导致服务逐渐拒绝请求）。
+
+---
+
+## 10.6 评测中的代码执行：HumanEval 的沙箱不是安全沙箱
+
+nanochat 的 HumanEval 评测会把模型生成的代码提取出来，并用 `nanochat/execution.py` 在子进程里执行（带超时与资源限制）。这套机制能防止大多数“意外破坏”（例如无限循环、误删文件等），但它**不是**真正的安全沙箱：
+
+- **执行是独立进程**：每次运行在单独的 `multiprocessing.Process` 中，主进程可在超时时 kill。
+- **默认限制**：timeout 默认 `5s`；内存上限默认 `256MB`（注意：在 macOS/Darwin 上，资源限制分支会被跳过，表现会不同）。
+- **“评测友好”的解析**：`tasks/humaneval.py` 会优先提取第一个 Markdown 代码块（```python 或 ```），否则把整个 completion 当代码。这意味着“带少量包装”的输出通常还能评测，但最稳妥的还是训练模型输出**纯代码**、不夹解释文本。
+- 网络访问不一定被阻断
+- Python 动态特性可能绕过部分限制
+- 没有内核级隔离（seccomp/容器/虚拟化）
+
+**Rule-of-thumb：** 在你不完全信任模型输出时，不要在宿主机上裸跑代码执行评测；把它放进容器/隔离环境里当成“高风险操作”对待。
 
 ---
 
 ## 本章小结
 
-- **KV Cache 机制**：通过在显存中预先分配张量，缓存历史 Token 的键（Key）和值（Value），将自回归生成 Decode 阶段的计算复杂度从 $O(T^2)$ 降低至 $O(T)$，是推理加速的核心基石。
-- **采样与温度**：温度 $T$ 调节 Logits 的分布平缓度，公式为 $P(x_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}$。Top-p 核采样通过动态截断长尾概率，在保证连贯性的同时维持生成的多样性。
-- **工具调用状态机**：工具调用并非魔法，而是由 `<|tool_call|>` 和 `<|tool_result|>` 等特殊 Token 驱动的有限状态机。Engine 需要在特定状态下暂停生成、解析 JSON、执行本地逻辑并注入结果。
-- **系统工程边界**：推理系统是模型权重的最终消费者。流式解码处理字节截断，SSE 解决网络长连接，保留头部的滑动窗口解决长对话 OOM。所有这些工程细节的输入格式，必须与 SFT 数据准备阶段的模板保持绝对对齐。
+- Engine 是 token 级推理：prefill 一次、decode 多步；KV cache 布局为 FA3 友好形状，并用 `cache_seqlens` 追踪位置。
+- nanochat 的采样只有 `temperature` 与 `top_k`；`temperature=0` 时是确定性贪心解码，`top_k` 不起作用。
+- 工具调用由 `<|python_start|>...<|python_end|>` 触发，引擎计算并强制注入 `<|output_start|>...<|output_end|>`；forced token 会被标记 mask=0，便于训练侧剔除。
+- CLI 是最小闭环调试工具；Web 版使用 worker pool + SSE 流式输出，并用 `�` 检查避免 UTF-8 乱码闪烁。
+- HumanEval 的执行环境是“评测用保护”，不是安全沙箱；需要额外隔离。
 
 ---
 
 ## 练习题
 
-**基础题**
-
-1. **KV Cache 原理与 Query**：在自回归生成的 Decode 阶段，为什么我们只需要缓存 Key 和 Value，而绝对不需要缓存 Query？
-   *Hint：仔细思考当前步（第 $t$ 步）的 Query 是由什么计算得出的，以及它在注意力公式中需要与哪些张量进行点积。历史的 Query 还会被用到吗？*
+1. **（基础）为什么 Engine 要先做 batch=1 的 prefill，再把 KV cache 复制成 `num_samples` 份，而不是直接 batch=`num_samples` 做 prefill？**
+   - *Hint：prompt 的计算能不能复用？prefill 成本在哪？*
    <details>
-   <summary>点击查看答案</summary>
-   当前步（第 $t$ 步）的 Query 仅由当前输入的单个 Token 计算得出。在注意力机制中，当前 Token 的 Query 需要与当前及所有历史 Token 的 Key 进行点积计算注意力权重，然后再与对应的 Value 进行加权求和。历史 Token（如第 $t-1$ 步）的 Query 只在它们被生成的那个时刻用于计算自身的注意力，对后续 Token 的生成没有任何作用。因此，Query 是即用即弃的，完全不需要缓存，缓存了也是浪费显存。
+   <summary>查看提示与答案</summary>
+   prefill 的主要成本是对长 prompt 的一次性前向计算。batch=1 prefill 只算一次 prompt，然后复制 cache 就能让多条样本共享同一份 prompt 计算结果；如果直接 batch=num_samples prefill，就会重复计算同一 prompt num_samples 次，浪费大量算力与显存带宽。
    </details>
 
-2. **温度参数的极端情况分析**：当采样温度 $T \to \infty$ 时，模型的输出概率分布会变成什么样？从直觉上看，这会导致模型在交互时表现出什么现象？
-   *Hint：观察公式 $P(x_i) = \frac{\exp(z_i / T)}{\sum \exp(z_j / T)}$ 中指数部分在 $T \to \infty$ 时的极限值。*
+2. **（基础）解释 `temperature=0` 时 `top_k` 为什么不影响结果。**
+   - *Hint：实现里是否进入采样分支？*
    <details>
-   <summary>点击查看答案</summary>
-   当 $T \to \infty$ 时，对于任意有限的 Logit 值 $z_i$，$z_i / T$ 都会趋近于 0。因此，分子 $\exp(z_i / T)$ 趋近于 $\exp(0) = 1$。由于词表中有 $|V|$ 个 Token，每个 Token 的概率都会趋近于 $1 / |V|$。此时，模型的输出概率分布变成了一个完全均匀的分布。
-   在交互时，这会导致模型完全随机地从词表中抽取 Token，无视任何上下文和语法规则，输出毫无逻辑、不可读的乱码。
+   <summary>查看提示与答案</summary>
+   因为温度为 0 时引擎走的是贪心解码（argmax）分支，不会做 multinomial 采样，也不会执行 top-k 截断逻辑。此时输出完全由最大 logit 决定，`top_k` 参数不会改变路径。
    </details>
 
-3. **对话模板的对齐灾难**：如果在 SFT 数据准备阶段，人类用户的输入被包裹在 `<|user|>` 和 `<|end|>` 之间，但在 CLI 推理时，开发者忘记在用户输入的末尾添加 `<|end|>`，模型最有可能出现什么行为？
-   *Hint：模型在训练时学到的序列模式（Pattern）被打破了。模型会试图如何“修复”这个未闭合的序列？*
+3. **（挑战）KV cache 显存为什么会在 decode 阶段随 “并发样本数 B” 与 “上下文长度 L” 线性增长？请写出一个近似的量级公式。**
+   - *Hint：cache 需要为每层存 K 和 V。*
    <details>
-   <summary>点击查看答案</summary>
-   模型会感到极度困惑，因为它在训练数据中从未见过没有闭合标签的序列。由于缺乏触发角色切换的 `<|end|>` 标志，最常见的行为是：模型会顺着用户的语气，继续补全用户的问题（即模型开始扮演用户，自己问自己问题），或者模型会自己生成一个 `<|end|>` 标签然后停止，而不是切换到助手角色（如 `<|assistant|>`）开始回答问题。这会导致交互完全失效。
+   <summary>查看提示与答案</summary>
+   KV cache 需要为每层、每个样本、每个位置、每个 KV head 存储 key 与 value 两个张量，因此显存大致与 `2 * n_layers * B * L * n_kv_head * head_dim * bytes_per_element` 成正比（最前面的 2 来自 K 与 V）。因此并发样本数和最大生成长度都是推理 OOM 的一线旋钮。
    </details>
 
-4. **Web UI 中的流式输出（Streaming）**：在 Web 界面中实现打字机效果时，为什么通常使用 Server-Sent Events (SSE) 或 WebSocket，而不是普通的 HTTP 短轮询（Short Polling）？
-   *Hint：考虑大语言模型自回归生成的频率，以及每次 HTTP 握手的网络开销和延迟。*
+4. **（挑战）工具调用状态机：当模型输出 `<|python_start|>`、一段表达式 token、再输出 `<|python_end|>` 时，引擎会注入哪些 token？这些 token 的 mask 应该是多少？**
+   - *Hint：forced token 队列。*
    <details>
-   <summary>点击查看答案</summary>
-   大语言模型生成 Token 的速度非常快（通常每秒几十到上百个 Token）。如果使用普通的 HTTP 短轮询，客户端需要每隔几十毫秒就发起一次完整的 HTTP 请求来询问是否有新 Token。这会产生海量的 TCP 握手/挥手开销、HTTP 头部冗余，并带来极高的网络延迟，导致打字机效果严重卡顿且极大地浪费服务器资源。
-   SSE 允许服务器在一个单向的长连接中，通过 `chunked` 编码持续向客户端推送数据流。连接只建立一次，后续的每个 Token 只是数据流中的一个轻量级事件，延迟极低且资源消耗极少，非常适合逐个 Token 吐出的自回归生成场景。
+   <summary>查看提示与答案</summary>
+   引擎会把表达式解码并执行计算器；若得到结果，会把 `<|output_start|>`、结果字符串对应的 token、`<|output_end|>` 依次压入 forced 队列。随后这些 token 会被强制输出，因此它们的 mask 应为 0（表示不是模型采样得到，而是系统注入/强制）。
    </details>
 
-**挑战题**
-
-5. **KV Cache 的显存占用严格估算**：假设一个 nanochat 模型有 $L$ 层，隐藏层维度为 $D$，使用多头注意力（没有使用 MQA 或 GQA），批大小为 $B$，序列长度为 $T$。请推导存储整个 KV Cache 所需的浮点数元素总数公式。如果模型参数为 $L=24, D=2048$，序列长度 $T=4096$，批大小 $B=1$，数据类型为 FP16（2 字节），请计算 KV Cache 占用的具体显存大小（以 MB 为单位）。
-   *Hint：每一层都需要保存 K 和 V 张量。注意张量的维度。1 MB = 1024 * 1024 Bytes。*
+5. **（挑战）为什么 Web 端要“累计 token 再 decode”，并检查解码结果是否以 `�` 结尾？**
+   - *Hint：多字节 UTF-8 字符可能被拆开。*
    <details>
-   <summary>点击查看答案</summary>
-   **公式推导**：
-   对于每一层，Key 和 Value 的形状均为 `(Batch, Seq_Len, Hidden_Dim)`，即 $(B, T, D)$。
-   因为有 K 和 V 两个张量，所以单层需要 $2 \times B \times T \times D$ 个元素。
-   总共有 $L$ 层，因此总元素数为 $2 \times B \times T \times D \times L$。
-   
-   **具体计算**：
-   元素总数 = $2 \times 1 \times 4096 \times 2048 \times 24 = 402,653,184$ 个元素。
-   因为使用 FP16，每个元素占 2 字节，总字节数 = $402,653,184 \times 2 = 805,306,368$ Bytes。
-   转换为 MB：$805,306,368 / (1024 \times 1024) = 768$ MB。
-   （结论：即使是单并发，4K 上下文的 KV Cache 也会吃掉近 1GB 的显存，这解释了为什么长文本推理显存压力巨大。）
+   <summary>查看提示与答案</summary>
+   某些 tokenizer 的 token 边界可能落在 UTF-8 多字节字符中间。若逐 token decode 并立即发送，前端会短暂看到不完整字符（通常显示为替换字符 `�`）造成闪烁。累计 token 并只在字符串末尾不是 `�` 时发送增量文本，可以避免把中间态发出去，从而稳定流式体验。
    </details>
 
-6. **工具调用的状态机死循环**：在测试工具调用功能时，开发者发现模型不断输出 `<|tool_call|>`，即使外部工具已经成功执行并返回了明确的结果。请从“数据格式对齐”和“模型能力泛化”两个角度，深入分析可能导致这种状态机死循环的原因。
-   *Hint：当 Engine 注入结果时，模型是否能认出这是结果？训练数据中是否教过模型“拿到结果后该干什么”？*
+6. **（挑战）WorkerPool 的 acquire/release 机制解决了什么问题？当所有 worker 都忙时会发生什么？**
+   - *Hint：并发与状态隔离。*
    <details>
-   <summary>点击查看答案</summary>
-   **角度一：数据格式对齐失败**。Engine 在将工具执行结果追加到上下文时，没有严格按照 SFT 训练时的格式添加标识符（例如漏掉了 `<|tool_result|>` 前缀，或者漏掉了闭合的 `<|im_end|>`）。模型看到一堆莫名其妙的 JSON 字符串，无法识别这是工具的返回结果，以为工具调用失败了或者还没调用，于是再次输出 `<|tool_call|>` 试图重新调用。
-   **角度二：模型能力泛化不足（数据分布缺陷）**。在 SFT 训练数据中，可能只提供了大量“用户提问 -> 模型调用工具”的正向样本，但严重缺乏“模型调用工具 -> 观察到结果 -> 停止调用并用自然语言总结”的完整轨迹。模型过度拟合了“遇到问题就生成 `<|tool_call|>`”这一动作，而没有学会“何时该停止调用”。
+   <summary>查看提示与答案</summary>
+   它把“并发请求调度”与“每张 GPU 上的模型/engine 状态”隔离开：每个 worker 独占一份模型副本与推理状态，避免 KV cache 等状态被跨请求污染。当所有 worker 都忙时，请求会在 `available_workers` 队列上等待，直到有 worker 被 release 回来。
    </details>
 
-7. **Top-p 采样的数值演算**：假设在某一步生成时，词表只有 5 个 Token (A, B, C, D, E)，经过 Softmax 后的概率分布为：$P(A)=0.5, P(B)=0.3, P(C)=0.1, P(D)=0.07, P(E)=0.03$。如果设置 Top-p 阈值 $p=0.85$，请详细写出演算过程，说明最终哪些 Token 会被保留，哪些会被截断，以及保留下来的 Token 重新归一化后的概率分别是多少？
-   *Hint：先按概率降序排列，然后逐个累加，直到累加和首次大于等于 $p$。*
+7. **（挑战）为什么 HumanEval 的执行环境被强调“不是安全沙箱”？对内部评测与对外服务分别有什么建议？**
+   - *Hint：对抗性代码与宿主机风险。*
    <details>
-   <summary>点击查看答案</summary>
-   **第一步：降序排列**。已经是降序：A(0.5), B(0.3), C(0.1), D(0.07), E(0.03)。
-   **第二步：累加概率寻找截断点**。
-   - 包含 A：累加和 = 0.5。0.5 < 0.85，继续。
-   - 包含 B：累加和 = 0.5 + 0.3 = 0.8。0.8 < 0.85，继续。
-   - 包含 C：累加和 = 0.8 + 0.1 = 0.9。0.9 >= 0.85，达到阈值，停止。
-   因此，保留的 Token 集合为 {A, B, C}，截断丢弃 {D, E}。
-   **第三步：重新归一化**。
-   保留集合的概率总和为 0.9。
-   - 新 $P(A) = 0.5 / 0.9 \approx 0.555$
-   - 新 $P(B) = 0.3 / 0.9 \approx 0.333$
-   - 新 $P(C) = 0.1 / 0.9 \approx 0.111$
-   </details>
-
-8. **批处理生成（Batch Generation）的 Padding 对齐问题**：在服务端（如 Web API）同时处理多个用户的并发请求时，需要将不同长度的 Prompt 组成一个 Batch 张量送入模型。为了对齐张量形状，必须使用填充符（Pad Token）。在自回归推理时，应该使用 Left Padding（左侧填充）还是 Right Padding（右侧填充）？请从自回归预测的机制详细解释原因。
-   *Hint：思考自回归生成的下一步预测依赖于输入序列的哪个特定位置的特征？*
-   <details>
-   <summary>点击查看答案</summary>
-   **必须使用 Left Padding（左侧填充）**。
-   原因：自回归生成的本质是基于序列的“最后一个有效 Token”来预测下一个 Token。模型在提取特征时，通常会取序列最后一个位置的 Logits 作为下一步的输出。
-   如果使用 Right Padding，不同长度的请求其真实的最后一个 Token 会被填充符（Pad Token）隔开。例如，序列 A 长度为 5，序列 B 长度为 3，如果用 Right Padding 对齐到长度 5，序列 B 的末尾两个位置就是 Pad Token。模型在取最后一个位置（位置 5）的特征时，对于序列 B 取到的是 Pad Token 的无意义特征，从而产生完全错误的输出。
-   通过 Left Padding，所有序列的填充符都在最左侧，所有序列的最后一个真实 Token 都能完美对齐在张量的最右侧（即索引 -1 的位置），模型统一取索引 -1 的特征即可正确预测下一个 Token。
+   <summary>查看提示与答案</summary>
+   因为它主要防的是“意外破坏”，并没有提供内核级隔离；对抗性代码可能绕过限制、访问网络或做更复杂的逃逸。内部评测也应放进容器/隔离环境；对外服务更不应执行不可信代码，至少需要更严格的沙箱（容器、seccomp、网络隔离、只读文件系统等）。
    </details>
 
 ---
 
 ## 常见陷阱与错误 (Gotchas)
 
-在将模型投入实际交互时，以下是数据准备人员和推理工程师最常遇到的几个深水区坑位。这些问题往往不会直接抛出 Python 异常，而是表现为模型变笨、变慢或行为诡异。
+1. **把 top-p 当成可用旋钮**
+   - **症状**：你按其他框架习惯去设置 top-p，发现 nanochat 没效果或压根没有参数入口。
+   - **修复**：nanochat 采样只实现 `temperature` 与 `top_k`；需要 top-p 就得改引擎采样逻辑，并同步调整训练/评测的默认假设。
 
-- **陷阱 1：KV Cache 导致的隐性 OOM（显存溢出）**
-  - **症状**：模型在刚启动时聊天非常流畅，但在多轮对话聊了十几轮（或输入了一篇长文章）后，突然抛出 CUDA Out of Memory 错误并崩溃。
-  - **根因**：Engine 初始化时没有设置硬性的最大上下文限制（Max Length），或者没有实现滑动窗口截断机制。随着对话进行，KV Cache 张量在 Decode 阶段不断被 `torch.cat` 追加，体积无限线性增长，最终撑爆显存。
-  - **调试技巧与修复**：在 Engine 的入口处强制断言 `seq_len < max_position_embeddings`。使用 `nvidia-smi` 监控显存随生成步数的线性增长曲线。实现 10.4.3 节描述的“保留头部的滑动窗口策略”，当上下文达到阈值（如 80% 显存容量）时主动丢弃早期对话。
+2. **Web 请求里塞 `system` role**
+   - **症状**：请求被拒绝或校验失败。
+   - **修复**：当前 Web 只支持 `user/assistant`。需要 system 指令时，把它合并进第一条 user（与 tokenizer 的 system 合并策略对齐）。
 
-- **陷阱 2：Tokenizer 编解码的不对称（Token Leakage）**
-  - **症状**：在 CLI 中与模型对话时，看到模型直接将 `<|im_start|>`、`<|tool_call|>` 或 `<|endoftext|>` 等字面字符串打印在了屏幕上，而不是触发相应的内部逻辑（如换行、调用工具或停止生成）。
-  - **根因**：Tokenizer 配置错误。通常是因为在 Decode 时没有配置 `skip_special_tokens=True`，或者在底层 Engine 中，判断生成结束的条件没有包含这些特殊 Token 的 ID。更严重的是，有时 Encode 时没有将这些字符串注册为 Special Tokens，导致它们被拆分成了多个普通的文本 Token（例如 `<`、`|`、`im`、`_` 等），模型根本不知道这是一个控制指令。
-  - **经验法则**：永远在投入 Engine 前，单独编写一个小脚本测试 Tokenizer 的 `encode` 和 `decode` 方法。确保特殊 Token 被正确映射为*单个*独立的 ID，并且在 Decode 时能够被正确捕获或隐藏。
+3. **KV cache OOM：并发与最大生成长度没控住**
+   - **症状**：decode 阶段突然 OOM，尤其在多样本采样或长对话时。
+   - **修复**：优先降低 `max_tokens`/并发样本数（Web 的并发由 worker 数决定，RL/评测的并发由 batch 决定），必要时降低上下文长度或模型规模。
 
-- **陷阱 3：工具调用的 JSON 解析雪崩**
-  - **症状**：模型正确输出了 `<|tool_call|>`，但随后 Engine 抛出 `json.decoder.JSONDecodeError` 异常，整个推理服务直接崩溃退出。
-  - **根因**：大语言模型本质上是概率模型，无法保证 100% 输出符合严格语法的 JSON。它偶尔会漏掉一个闭合引号，或者在 JSON 块中间加入非法的换行符。如果 Engine 的解析逻辑过于脆弱（直接调用 `json.loads`），就会导致系统雪崩。
-  - **调试技巧与修复**：在状态机的解析节点加入坚固的 `try-except` 块。**永远不要因为模型输出格式错误而崩溃服务端**。如果解析失败，应该将错误信息（例如：“JSON 格式错误，缺少闭合括号，请修正后重试”）包装成 `<|tool_result|>` 喂回给模型。现代微调过的模型通常具备强大的自纠错（Self-Correction）能力，能够在下一轮中输出正确的 JSON。
+4. **工具调用“格式不对齐”导致状态机失灵**
+   - **症状**：模型输出了 `<|python_start|>` 但引擎没注入结果，或注入后模型继续重复调用。
+   - **修复**：先确认模型确实输出了 `<|python_end|>`（引擎在 end 时才 eval）；再检查表达式 token 解码后是否落在计算器允许的字符集合内；最后对齐训练样本与推理拼接在空格/换行上的分布。
 
-- **陷阱 4：Train-Inference 格式不匹配（分布偏移的终极杀手）**
-  - **症状**：模型在 SFT 阶段的 Loss 降得很低，评测指标也很好，但在实际 CLI 聊天时，表现得像个智障，答非所问，或者频繁出现重复生成。
-  - **根因**：这是最常见的性能灾难。SFT 训练时，数据准备脚本在 Prompt 结尾（例如 `<|im_start|>assistant` 后面）带有一个换行符或空格，而推理代码 `chat_cli.py` 在拼接字符串时漏掉了这个空格。这种微小的字节级分布偏移（Distribution Shift）会让模型进入一个它从未见过的隐状态空间，导致生成质量断崖式下降。
-  - **经验法则**：不要相信你的眼睛，相信代码的输出。将 SFT 数据集中的一条样本（Decode 成纯文本）打印到文件 `train_sample.txt`，将推理引擎实际送入模型的纯文本打印到文件 `infer_sample.txt`。使用 Linux 命令 `diff -u train_sample.txt infer_sample.txt` 或 `hexdump` 对比，确保两者在进入模型前的最后一个字节是绝对一致的。
+5. **把 HumanEval 执行当成“安全运行环境”**
+   - **症状**：在宿主机上直接执行模型生成代码，担心系统被破坏。
+   - **修复**：把它当成评测辅助而不是安全沙箱。任何不可信代码执行都应放在更严格的隔离环境里。
 
-- **陷阱 5：EOS Token 被忽略导致无限生成**
-  - **症状**：模型正确回答了用户的问题，但回答完之后不停止，而是继续自言自语，甚至开始生成乱码，直到达到 `max_new_tokens` 限制才停下。
-  - **根因**：模型在训练时学习到在回答结束时输出特定的 EOS（End of Sequence）Token，但在推理引擎的生成循环中，没有正确设置 `stop_token_ids`。Engine 没认出这个 Token 是停止信号，继续强制模型往下生成。
-  - **修复方法**：检查 Engine 的 `generate` 函数，确保 `while` 循环的终止条件中包含了所有可能的停止 Token ID（例如 `tokenizer.eos_token_id`，以及 ChatML 格式中的 `<|im_end|>` 的 ID）。一旦生成的 Token ID 命中该列表，立即 `break` 退出循环。
+6. **推理端 dtype 变更但忘了 KV cache**
+   - **症状**：你改了推理端 autocast/dtype（或在 CUDA 上强制 FP32），结果要么直接报 dtype 不匹配，要么吞吐/数值表现怪异。
+   - **修复**：检查 `Engine.generate()` 里 KV cache 的 dtype 假设（CUDA=BF16，其他=FP32）。如果你要改变推理精度策略，需要把 KV cache 的分配逻辑一起改掉，或改成延迟分配/显式传参。

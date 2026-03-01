@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="./">
-    <title>第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</title>
+    <title>第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</title>
     <link rel="stylesheet" href="assets/style.css">
     <link rel="stylesheet" href="assets/highlight.css">
     <script src="assets/script.js" defer></script>
@@ -81,14 +81,14 @@
                     <div class="tree-item " >
                         <a href="chapter5.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                            <span class="tree-title">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）</span>
                         </a>
                     </div>
                 
                     <div class="tree-item " >
                         <a href="chapter6.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                            <span class="tree-title">第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</span>
                         </a>
                     </div>
                 
@@ -102,7 +102,7 @@
                     <div class="tree-item active" >
                         <a href="chapter8.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</span>
                         </a>
                     </div>
                 
@@ -116,7 +116,7 @@
                     <div class="tree-item " >
                         <a href="chapter10.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）</span>
                         </a>
                     </div>
                 
@@ -130,7 +130,7 @@
                     <div class="tree-item " >
                         <a href="chapter12.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（把问题拆成「token × 吞吐 × 数值」三条线）</span>
                         </a>
                     </div>
                 
@@ -213,286 +213,253 @@
         
         <main class="content">
             <article>
-                <h1 id="8-sft-maskidentity">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</h1>
-<p>预训练赋予了模型庞大的世界知识与基础的语言建模能力，但此时的模型仅仅是一个“无情的文本接龙机器”。如果你给预训练模型输入“如何烤蛋糕？”，它极大概率会续写“如何煮咖啡？”或者“——选自《家庭烘焙指南》”，而不是像一个 AI 助手那样给出步骤。要将这种无监督的续写能力转化为听懂指令、遵循对话规范、甚至能调用工具的交互能力，我们需要进行监督微调（Supervised Fine-Tuning, SFT）。</p>
-<p>本章将从数据工程与模型训练的交叉视角，深入拆解 SFT 阶段的核心任务。在 nanochat 的极简架构中，SFT 数据的准备并非简单的文本拼接，而是包含了一系列极其严苛的工程约定：如何把人类的对话意图翻译成模型能理解的 Token 序列，如何通过掩码（Mask）精确控制模型只在正确的地方产生梯度，以及如何像调配鸡尾酒一样混合不同能力维度的数据集。数据准备的第一性原理是：<strong>格式一致、可复现的打乱（Shuffle）、可解释的掩码与打包</strong>；否则，后续任何训练算法层面的优化，都会被数据的噪声彻底淹没。</p>
+                <h1 id="8-sft-rendermaskbest-fit-padidentity">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</h1>
+<p>预训练把模型变成了“强大的文本压缩器”，但它并不会天然以“助手”的方式对话：它不知道什么时候该等用户、什么时候该停止、也不知道哪些内容应该由工具计算、哪些内容应该由语言生成。监督微调（SFT）的任务，就是把这种纯语言建模能力，塑形成一套<strong>可控的交互协议</strong>：固定的对话边界、固定的结束信号、固定的工具调用形态、以及可复现的任务混合策略。</p>
+<p>nanochat 的 SFT 数据准备有一个很鲜明的工程特征：它不追求“通用对话模板兼容一切生态”，而是把协议压到最小、写进 tokenizer 和训练脚本里。对数据准备人员来说，这既是好消息（约束少、可控性强），也是危险点（任何细节不一致都会带来分布偏移）。本章会沿着代码的实际路径，把它拆成三层：<strong>对话对象长什么样</strong>、<strong>如何渲染成 token 序列并生成 mask</strong>、<strong>训练时如何 packing 与混合任务</strong>，并把 nanochat 里一些“很有意思的细节”嵌到合适的位置（例如 GSM8K 的工具轨迹、TaskMixture 的确定性 shuffle、以及多选题渲染时一个空格就能毁掉小模型的绑定能力）。</p>
 <hr />
-<h2 id="81-token">8.1 对话格式与特殊 Token 约定：构建结构化边界</h2>
-<p>在预训练阶段，数据是一维的连续文本流，文档与文档之间通常只用一个特殊的结束符（如 <code>&lt;|endoftext|&gt;</code>）隔开。而在 SFT 阶段，数据是高度结构化的多轮对话。我们需要通过特定的“控制字符”（Special Tokens）在扁平的 Token 序列中划定出角色边界与结构边界。</p>
-<p>nanochat 采用了业界广泛验证的 ChatML（Chat Markup Language）风格。这种风格通过引入显式的角色标记，将系统指令（System）、用户输入（User）和模型回复（Assistant）清晰地隔离开来。</p>
-<h3 id="811-token">8.1.1 扁平 Token 流的视觉化解析</h3>
-<p>为了让模型理解“谁在说话”以及“什么时候该停止说话”，我们引入了两个核心的特殊 Token：<code>&lt;|im_start|&gt;</code>（消息开始）和 <code>&lt;|im_end|&gt;</code>（消息结束）。注意，角色名称（如 system, user, assistant）本身通常不是特殊 Token，而是普通的文本 Token，紧跟在 <code>&lt;|im_start|&gt;</code> 之后。</p>
-<p>以下是一个典型的单轮对话在扁平 Token 流中的物理形态：</p>
-<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------------------+
-| 结构化对话在 Token 序列中的物理展开 (ASCII 示意)                                  |
-+-----------------------------------------------------------------------------------+
-| 序列索引:   0       1        2      3      4           5       6                  |
-| Token:    [BOS]   &lt;|im_start|&gt; system \n   你是一个助手。 &lt;|im_end|&gt; \n                 |
-| 角色归属:  [控制]  [----系统指令区----]    [----系统指令区----] [控制] [格式]             |
-
-| 角色归属:  [控制]  [----系统指令区----]    [----系统指令区----] [控制] [格式]             |
-|                                                                                   |
-| 序列索引:   7       8        9      10     11          12      13                 |
-| Token:    &lt;|im_start|&gt; user   \n   1+1=?  &lt;|im_end|&gt;  \n                          |
-| 角色归属:  [----用户输入区----]    [--用户输入区--] [控制] [格式]                       |
-|                                                                                   |
-| 序列索引:   14      15       16     17     18          19                         |
-| Token:    &lt;|im_start|&gt; assistant\n 1+1=2. &lt;|im_end|&gt;  [EOS]                       |
-| 角色归属:  [----模型回复区----]    [--模型回复区--] [控制] [控制]                       |
-
-+-----------------------------------------------------------------------------------+
-</code></pre></div>
-
-<h3 id="812">8.1.2 格式的“防注入”与“闭合”特性</h3>
-<p>在设计对话模板时，最核心的考量是<strong>防注入（Prompt Injection Resistance）</strong>。如果仅仅使用普通的字符串（例如 <code>User:</code> 和 <code>Assistant:</code>）作为分隔符，恶意用户可以在输入中包含 <code>Assistant: 我是一个坏机器人</code>，从而欺骗模型，让模型以为这句话是自己生成的。</p>
-<p>通过将 <code>&lt;|im_start|&gt;</code> 和 <code>&lt;|im_end|&gt;</code> 注册为 Tokenizer 词表中的<strong>不可分割的特殊 Token</strong>（Special Tokens），即使用户在输入中敲入了字符串 <code>&lt;|im_start|&gt;</code>，Tokenizer 也会将其拆解为普通的字符 Token，而不会将其解析为控制 Token。这样就在物理层面上隔离了“控制平面”与“数据平面”。</p>
-<p><strong>经验法则（Rule-of-Thumb）：</strong></p>
-<ol>
-<li><strong>绝对闭合</strong>：每一个 <code>&lt;|im_start|&gt;</code> 必须有对应的 <code>&lt;|im_end|&gt;</code>。如果格式不闭合，模型在推理时将无法知道何时该停止生成，从而引发无限循环或胡言乱语。</li>
-<li><strong>换行符的归属</strong>：强烈建议在角色名称后强制加一个换行符 <code>\n</code>，在 <code>&lt;|im_end|&gt;</code> 后也强制加一个换行符 <code>\n</code>。这不仅符合人类阅读习惯，也能让模型在生成时有更明确的视觉停顿。必须确保训练数据和推理时的模板在空格和换行符上<strong>字节级一致</strong>。</li>
-</ol>
-<hr />
-<h2 id="82-masking">8.2 掩码机制（Masking）：精确控制学习信号与梯度</h2>
-<p>在预训练中，目标是预测序列中的每一个下一个 Token（Next-Token Prediction）。但在 SFT 中，我们<strong>不希望</strong>模型去学习如何“预测系统指令”或“预测用户的提问”。如果模型学会了预测用户提问，它在推理时可能会在回答完问题后，自导自演地继续生成下一个问题。</p>
-<p>因此，我们需要引入掩码（Mask）机制，精确控制损失函数（Loss）的计算范围，确保模型<strong>只在生成 Assistant 回复（包括结束符）时产生梯度</strong>。</p>
-<h3 id="821">8.2.1 错位预测与掩码对齐的数学逻辑</h3>
-<p>在自回归语言模型中，给定输入序列 $X = \{x_1, x_2, ..., x_T\}$，模型在位置 $i$ 的输出逻辑（Logits）用于预测位置 $i+1$ 的 Token $x_{i+1}$。</p>
-<p>我们构建一个与输入等长的布尔型掩码数组 $M = \{m_1, m_2, ..., m_T\}$，其中 $m_i \in \{0, 1\}$。</p>
+<h2 id="81-conversation-messagesparts">8.1 Conversation 数据模型：<code>messages</code>、<code>parts</code> 与“严格交替”</h2>
+<p>在 nanochat 的 <code>tasks/</code> 里，“一条训练样本”统一被表示为一个 conversation 字典：</p>
 <ul>
-<li>当 $x_i$ 属于 System Prompt、User Prompt 或结构控制符（如 <code>&lt;|im_start|&gt; user</code>）时，$m_i = 0$。</li>
-<li>当 $x_i$ 属于 Assistant 的实际回复内容，以及标志回复结束的 <code>&lt;|im_end|&gt;</code> 时，$m_i = 1$。</li>
+<li><code>conversation["messages"]</code> 是一个消息列表</li>
+<li>每条消息是 <code>{ "role": "...", "content": ... }</code></li>
+<li>role 主要是 <code>user</code> / <code>assistant</code>（tokenizer 也支持 conversation 第一条是 <code>system</code>，但有额外处理，见 8.2）</li>
 </ul>
-<p>在计算交叉熵损失（Cross-Entropy Loss）时，我们需要对输入和目标进行<strong>错位（Shift）</strong>。假设我们取前 $T-1$ 个 Token 作为输入，后 $T-1$ 个 Token 作为预测目标。此时，掩码也必须同步错位。</p>
-<p>具体的带掩码的交叉熵损失公式如下：</p>
-<p>$$ L = - \frac{1}{\sum_{i=1}^{T-1} m_{i+1}} \sum_{i=1}^{T-1} m_{i+1} \log P(x_{i+1} | x_1, x_2, ..., x_i) $$
-公式解析：</p>
+<p>最关键的强约束是：<strong>消息必须严格交替</strong>。</p>
+<p><code>nanochat/tokenizer.py</code> 的 <code>render_conversation()</code> 会做断言：</p>
+<ul>
+<li>第 0 条（去掉 system 处理后）必须是 <code>user</code></li>
+<li>第 1 条必须是 <code>assistant</code></li>
+<li>之后依次交替</li>
+</ul>
+<p>这条约束看似死板，但它把一类非常常见的“静默错误”提前变成了显式崩溃：如果你数据里出现了 <code>user,user,assistant</code> 这种结构，很多框架会默默拼接成怪异 prompt，导致模型学到“自问自答”的坏习惯；nanochat 选择直接 crash，让你在数据准备阶段就修掉。</p>
+<p>另外，assistant 的 <code>content</code> 有两种形态：</p>
 <ol>
-<li>$P(x_{i+1} | x_1, ..., x_i)$ 是模型在看到前 $i$ 个 Token 后，预测第 $i+1$ 个 Token 的概率。</li>
-<li>$m_{i+1}$ 是第 $i+1$ 个 Token 的掩码。如果第 $i+1$ 个 Token 是用户输入，则 $m_{i+1} = 0$，该项对 Loss 的贡献为 0。</li>
-<li>分母 $\sum_{i=1}^{T-1} m_{i+1}$ 是当前序列中<strong>有效预测 Token 的总数</strong>。这一步极其重要，如果不除以有效 Token 数，而是除以总长度 $T$，会导致包含大量用户输入、回复极短的对话样本产生的 Loss 极小，从而被模型忽略。</li>
+<li><strong>纯字符串</strong>：最常见的对话回复。</li>
+<li><strong>parts 列表</strong>：用于表达“文本 + 工具调用 + 工具输出”的轨迹。每个 part 是形如 <code>{ "type": "...", "text": "..." }</code> 的字典，常见 type 包括：
+   - <code>text</code>
+   - <code>python</code>（工具调用：表达式）
+   - <code>python_output</code>（工具输出：结果字符串）</li>
 </ol>
-<h3 id="822-ascii">8.2.2 掩码对齐的 ASCII 实例</h3>
-<p>这是 SFT 数据准备中最容易发生“差一错误（Off-by-one Error）”的地方。我们通过一个极简的例子来演示错位逻辑：</p>
-<p>假设原始 Token 序列为：<code>[BOS, User, Assis, End, EOS]</code>
-其中 <code>User</code> 代表用户提问，<code>Assis</code> 代表模型回复，<code>End</code> 代表 <code>&lt;|im_end|&gt;</code>。</p>
-<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------+
-| 掩码错位与 Loss 计算对齐表                                            |
-+-----------------------------------------------------------------------+
-| 时间步 (i)    :   0        1        2        3         (4)            |
-| 原始序列 (X)  :  [BOS]    [User]   [Assis]  [End]     [EOS]           |
-| 原始掩码 (M)  :    0        0        1        1         0             |
-
-| 原始掩码 (M)  :    0        0        1        1         0             |
-|                                                                       |
-| 模型输入 (In) :  [BOS]    [User]   [Assis]  [End]     (丢弃最后一位)  |
-| 预测目标 (Tgt):  [User]   [Assis]  [End]    [EOS]     (丢弃第一位)    |
-| 目标掩码 (M&#39;) :    0        1        1        0       (同步目标错位)  |
-|                                                                       |
-| 行为解释      :  根据BOS  根据User 根据Assis 根据End                  |
-|                  预测User 预测Assis 预测End   预测EOS                 |
-| 梯度是否保留  :   [否]     [是]     [是]      [否]                    |
-
-+-----------------------------------------------------------------------+
+<p>这种 parts 结构不是为了“好看”，而是为了让渲染阶段能精确插入工具边界 token，并为后续的 supervision mask 做准备。</p>
+<hr />
+<h2 id="82-nanochat-render_conversation-token">8.2 nanochat 的对话渲染：<code>render_conversation()</code> 与特殊 Token 协议</h2>
+<p>SFT 的第一性原理是：<strong>训练时喂给模型的 token 序列，必须与推理时引擎构造的 token 序列一致</strong>。nanochat 把这条一致性写成了一个非常明确的特殊 token 协议（见 <code>SPECIAL_TOKENS</code>）：</p>
+<ul>
+<li><code>&lt;|bos|&gt;</code>：每个对话/文档的起始锚点（BOS）</li>
+<li><code>&lt;|user_start|&gt;</code> / <code>&lt;|user_end|&gt;</code>：包裹用户消息</li>
+<li><code>&lt;|assistant_start|&gt;</code> / <code>&lt;|assistant_end|&gt;</code>：包裹助手消息</li>
+<li><code>&lt;|python_start|&gt;</code> / <code>&lt;|python_end|&gt;</code>：包裹工具调用表达式（由 assistant 生成）</li>
+<li><code>&lt;|output_start|&gt;</code> / <code>&lt;|output_end|&gt;</code>：包裹工具输出（在推理时由引擎注入）</li>
+</ul>
+<h3 id="821-system-user">8.2.1 System 消息的特殊处理：合并到第一条 user</h3>
+<p><code>render_conversation()</code> 支持 conversation 的第 0 条消息为 <code>system</code>，但它并不会单独渲染一段 <code>&lt;|system_start|&gt;</code>（nanochat 没有这个 token）。它做的是一种“外科手术”：</p>
+<ul>
+<li>断言 system 后必须紧跟一条 user</li>
+<li>把 system 的内容与 user 的内容用 <code>"\n\n"</code> 拼起来</li>
+<li>然后把 system 消息丢掉，后续按 user/assistant 交替渲染</li>
+</ul>
+<p>这对数据准备很重要：如果你想引入 system 指令，请意识到它会被“折叠”进 user 文本里，并且中间必然出现两个换行符。</p>
+<h3 id="822-token-ascii">8.2.2 扁平 token 流的物理形态（ASCII 展开）</h3>
+<p>下面用一个带工具的简化对话，展示它在 token 序列里的“物理展开”。注意：这是概念图，真实 tokenization 还会把文本切成 BPE token id。</p>
+<div class="codehilite"><pre><span></span><code>[BOS]
+ &lt;|user_start|&gt;   用户问题文本...   &lt;|user_end|&gt;
+ &lt;|assistant_start|&gt;
+   助手自然语言... 
+   &lt;|python_start|&gt;  12/60  &lt;|python_end|&gt;
+   &lt;|output_start|&gt;  0.2    &lt;|output_end|&gt;
+   ...继续推理，最终写出 #### 10
+ &lt;|assistant_end|&gt;
+ (下一轮 user/assistant ... )
 </code></pre></div>
 
-<p>请仔细观察：当模型输入为 <code>[User]</code> 时，它需要预测 <code>[Assis]</code>。此时目标是 <code>[Assis]</code>，其对应的目标掩码为 <code>1</code>。这意味着<strong>利用用户提问的最后一个 Token 来预测模型回复的第一个 Token，是需要计算 Loss 的</strong>。</p>
-<p><strong>经验法则（Rule-of-Thumb）：</strong>
-永远不要信任你刚写好的掩码生成逻辑。在将数据送入训练循环之前，务必将前几个 Batch 的数据解码回文本，并将 <code>input_ids</code> 与 <code>labels</code>（即应用了掩码的目标序列，通常将掩码为 0 的位置设为 <code>-100</code> 以便 PyTorch 的 CrossEntropyLoss 忽略）并排打印出来。肉眼检查 <code>-100</code> 是否恰好在 Assistant 回复的第一个字之前停止，并在 <code>&lt;|im_end|&gt;</code> 之后恢复。</p>
+<p>其中 <code>&lt;|assistant_end|&gt;</code> 非常关键：它是一个“硬停止信号”，推理引擎会把它作为 stopping criteria 之一（见第 10 章）。如果你的 SFT 数据里缺少它，模型就很难学会“何时闭嘴”。</p>
+<h3 id="823-mask-token">8.2.3 <code>mask</code> 的语义：哪些 token 应该产生监督信号</h3>
+<p><code>render_conversation()</code> 会返回两个等长数组：</p>
+<ul>
+<li><code>ids</code>：token id 序列</li>
+<li><code>mask</code>：0/1 序列，<code>mask=1</code> 表示该位置的 token 期望被监督（产生 loss/梯度）</li>
+</ul>
+<p>nanochat 的 mask 设计体现了一个非常清晰的意图：</p>
+<ul>
+<li>user 侧 token（包括 <code>&lt;|user_start|&gt;</code>、用户文本、<code>&lt;|user_end|&gt;</code>）全部 <code>mask=0</code></li>
+<li>assistant 侧的自然语言与工具调用表达式（<code>&lt;|python_start|&gt;...&lt;|python_end|&gt;</code>）是 <code>mask=1</code></li>
+<li>工具输出（<code>&lt;|output_start|&gt;...&lt;|output_end|&gt;</code>）是 <code>mask=0</code>，因为这些 token 在推理时来自“外部系统”（引擎注入），不应该让模型去学会“凭空猜工具输出”</li>
+<li><code>&lt;|assistant_end|&gt;</code> 被标为 <code>mask=1</code>（模型需要学会输出它来停止）</li>
+</ul>
+<p>这套 mask 让你可以在数据层面明确表达：“模型负责说话与发起工具调用；工具输出由系统注入，不监督。”</p>
+<h3 id="824-render_for_completion-rl">8.2.4 <code>render_for_completion()</code>：评测与 RL 的关键拼接点</h3>
+<p>在评测与 RL 中，conversation 通常包含“标准答案的 assistant 消息”（例如 GSM8K 的参考解答）。但生成时我们需要让模型补全一个新的 assistant 回复，而不是把参考答案继续喂给它。</p>
+<p>因此 nanochat 提供了 <code>render_for_completion()</code>：</p>
+<ul>
+<li>深拷贝 conversation</li>
+<li><strong>删除最后一条 assistant 消息</strong></li>
+<li>用 <code>render_conversation()</code> 渲染剩余内容</li>
+<li>在末尾追加 <code>&lt;|assistant_start|&gt;</code>，把模型置于“等待生成 assistant”状态</li>
+</ul>
+<p><code>scripts/chat_eval.py</code>、<code>scripts/chat_rl.py</code> 都依赖这条逻辑；你若自行实现 prompt 构造，请优先复用这个语义。</p>
 <hr />
-<h2 id="83-task-mixing-oversampling-sft">8.3 任务混合与过采样（Task Mixing &amp; Oversampling）：调配 SFT 鸡尾酒</h2>
-<p>一个优秀的 Chat 模型不能只会闲聊。它需要具备多种能力：日常对话、逻辑推理、数学计算、代码编写、甚至调用外部工具（Function Calling）。这些数据往往来自不同的开源数据集或内部合成数据集，且数据量级差异巨大。</p>
-<p>例如，通用闲聊数据（如 ShareGPT 格式的网页抓取对话）可能高达数百万条，而高质量的数学推理数据（如 GSM8K 的变体）或工具调用数据往往只有几万条。如果直接将所有数据简单拼接并训练，模型会被数据量庞大的通用闲聊主导，变成一个“只会贫嘴但无法解决复杂问题”的废柴。</p>
-<h3 id="831-data-recipe">8.3.1 数据配方（Data Recipe）的构建</h3>
-<p>我们需要进行精细的数据混配（Data Mixing）。数据混配的核心思想是：<strong>通过降采样（Undersampling）抑制低质量/高冗余数据，通过过采样（Oversampling）强化高质量/核心能力数据</strong>。</p>
-<p>以下是一个典型的 nanochat SFT 数据配方示例：</p>
-<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------------------+
-| SFT 混合数据池配方示例 (总预算: 约 500,000 条)                                    |
-+-----------------------------------------------------------------------------------+
-| 数据集域       | 原始数据量 | 质量评估 | 采样策略           | 目标数据量 | 占比   |
-
-| 数据集域       | 原始数据量 | 质量评估 | 采样策略           | 目标数据量 | 占比   |
-|----------------|------------|----------|--------------------|------------|--------|
-| 通用指令与闲聊 | 2,000,000  | 中等/高噪| 强降采样 (0.1x)    | 200,000    | 40%    |
-| 高质量逻辑推理 |    50,000  | 极高     | 过采样 (2.0x)      | 100,000    | 20%    |
-| 代码编写与解释 |    80,000  | 高       | 轻度过采样 (1.25x) | 100,000    | 20%    |
-| 工具调用(JSON) |    20,000  | 极高     | 强过采样 (2.5x)    |  50,000    | 10%    |
-| 身份与安全对齐 |     5,000  | 极高     | 极强过采样 (10.0x) |  50,000    | 10%    |
-|----------------|------------|----------|--------------------|------------|--------|
-| 合计           | 2,155,000  |   -      | 混合后全局 Shuffle | 500,000    | 100%   |
-
-+-----------------------------------------------------------------------------------+
-</code></pre></div>
-
-<h3 id="832">8.3.2 混合策略的权衡与风险</h3>
+<h2 id="83-sft-dataloaderbest-fit-pad-packing-token">8.3 SFT DataLoader：best-fit pad packing（不丢监督 token）</h2>
+<p>SFT 的对话长度同样是长尾分布。nanochat 在 <code>scripts/chat_sft.py</code> 里实现了一个与 base 预训练“同一风格”的 best-fit，但关键取舍相反：<strong>宁愿 padding，也不裁剪</strong>。</p>
+<p>它的核心策略是：</p>
 <ol>
-<li><strong>过采样的风险（Overfitting）</strong>：对同一批数据进行过多的重复采样（例如重复 10 次以上），会导致模型对这些特定的 Prompt 产生严重的过拟合。模型可能会死记硬背答案，而不是学习解决问题的方法。对于需要强过采样的数据（如身份数据），最好通过模板替换生成多样化的 Prompt，而不是单纯复制。</li>
-<li><strong>能力遗忘（Catastrophic Forgetting）</strong>：SFT 阶段模型专注于学习对话格式和指令遵循，可能会“遗忘”预训练阶段学到的广泛世界知识。</li>
-<li><strong>长度分布失衡</strong>：如果代码数据普遍很长（平均 2000 Tokens），而闲聊数据普遍很短（平均 100 Tokens），那么即使按“条数”比例混合，在实际训练时，模型在代码上消耗的计算量（FLOPs）也会远大于闲聊。因此，高级的数据配方往往基于 <strong>Token 数量</strong> 而不是 <strong>条目数量</strong> 来进行配比。</li>
+<li>维护一个 conversation token 序列缓冲（每条对话已经包含 BOS 与各种边界 token）</li>
+<li>构造每一行容量为 <code>max_seq_len+1</code></li>
+<li>优先选择“能完整放入的最长对话”拼进去（best-fit）</li>
+<li>若剩余空间装不下任何完整对话，就用 BOS token 把剩余填满（pad），并把 padding 对应的 targets 设为 <code>-1</code></li>
 </ol>
-<p><strong>经验法则（Rule-of-Thumb）：</strong>
-不要盲目追求 SFT 阶段的数据量。对于 1B~7B 级别的模型，50 万条高质量、格式严谨、领域均衡的 SFT 数据，其效果远胜于 500 万条未经清洗的粗糙数据。在调整配方时，每次只改变一个领域的比例，并观察评估指标（如 ChatCORE）的变化。</p>
+<p>这里的 <code>-1</code> 是 nanochat 的 ignore_index 约定（<code>nanochat/gpt.py</code> 的交叉熵就是 <code>ignore_index=-1</code>）。这与很多默认使用 <code>-100</code> 的代码库不同，是一个需要全链路对齐的约定。</p>
+<h3 id="831-sft-mask-padding">8.3.1 一个容易忽略但很关键的事实：当前 SFT 训练只 mask 了 padding</h3>
+<p>尽管 tokenizer 能生成 <code>mask</code>（用于标记 user token 与工具输出 token），但 <code>chat_sft.py</code> 当前的数据生成器只使用 <code>ids</code>，并没有把 <code>mask</code> 转换成 targets 的 ignore_index。它主要只做了两件事：</p>
+<ul>
+<li>packing + BOS padding</li>
+<li>把 padding 位置的 targets 设为 <code>-1</code></li>
+</ul>
+<p>这意味着：<strong>SFT 实际上更接近“对整段对话 transcript 做 next-token modeling”</strong>，而不是经典的“只训练 assistant 回复”。这不是对错问题，而是你必须知道的事实：它会影响你对 loss 的解读、也会影响工具输出 token 是否被监督。</p>
+<p>如果你希望严格遵循 <code>render_conversation()</code> 的 mask 语义（不监督 user 与工具输出），你需要在数据准备或 loss 计算处显式应用这个 mask（把 mask=0 的位置置为 <code>-1</code>）。这类改造属于“配方变更”，会改变收敛与行为，请在小模型上先做对照实验再放大。</p>
+<h3 id="832-ddp-sft-rank">8.3.2 DDP 视角：SFT 的分片与“结束条件”要跨 rank 同步</h3>
+<p>SFT 训练的 dataset 来自 <code>TaskMixture</code>（见 8.4），每个 rank 按 <code>cursor += world_size</code> 的 stride 读取不同样本，以避免重叠。由于生成器内部还有 buffering（提前 refill），<code>chat_sft.py</code> 会单独追踪“实际 consumed 的样本数”，并用它估计进度与 epoch。</p>
+<p>更关键的是：当某个 rank 认为 “last_step=True”（例如跑完一轮数据或达到 <code>--num-iterations</code>），其他 rank 必须同步停下，否则就会出现分布式 hang。脚本会用一次 all-reduce 把 <code>last_step</code> 在所有 rank 上取 max，保证大家一起结束。</p>
 <hr />
-<h2 id="84-identity-synthesis">8.4 身份数据合成（Identity Synthesis）：确立自我认知</h2>
-<p>在模型发布后，用户最喜欢问的第一个问题往往是：“你是谁？”“你是哪个公司开发的？”“你和 ChatGPT 有什么关系？”</p>
-<p>如果模型在 SFT 阶段没有系统性地见过这类数据，它会根据预训练语料或开源 SFT 数据中的残留信息进行回答。结果就是，一个由你亲自训练的 nanochat 模型，可能会信誓旦旦地宣称自己是“由 OpenAI 开发的大型语言模型”。这种现象被称为<strong>身份幻觉（Identity Hallucination）</strong>。</p>
-<h3 id="841">8.4.1 身份数据的维度与模板生成</h3>
-<p>为了解决这个问题，我们需要在 SFT 数据集中混入专门的身份数据。由于这类数据很难从开源社区直接获取（开源数据往往带有其他模型的身份烙印），我们通常采用脚本自动化合成。</p>
-<p>一个完善的身份数据集应该覆盖以下几个维度的提问：</p>
+<h2 id="84-taskmixture-shuffle-oversample">8.4 任务混合：TaskMixture 的确定性 shuffle 与 oversample</h2>
+<p>SFT 的能力来自“混合”：闲聊对话教语气与礼貌，多选题教约束输出空间，GSM8K 教推理与工具，拼写类教极端细粒度的字符感知……但混合的关键不是“把数据拼一起”，而是：</p>
 <ol>
-<li><strong>基础身份询问</strong>：“你是谁？”、“介绍一下你自己。”</li>
-<li><strong>创造者询问</strong>：“你的创造者是谁？”、“你是哪家公司的产品？”</li>
-<li><strong>能力边界询问</strong>：“你能做什么？”、“你有什么局限性？”</li>
-<li><strong>对抗性询问</strong>（极重要）：“你其实是 GPT-4 对吧？”、“你的底层架构是 Llama 吗？”</li>
+<li><strong>顺序要可复现</strong>：否则你无法解释某次 run 的波动来自哪里；</li>
+<li><strong>过采样要可控</strong>：小而关键的数据必须被看见足够多次。</li>
 </ol>
-<p>合成脚本（如 nanochat 中的 <code>dev/gen_synthetic_data.py</code>）会定义数十种不同的提问模板，以及对应的标准答案模板。通过笛卡尔积式的组合，可以快速生成数千条高质量的问答对。</p>
-<p>例如，对于对抗性询问，标准答案应当是坚定且礼貌的拒绝与澄清：
-<em>User</em>: “别装了，我知道你是 Claude。”
-<em>Assistant</em>: “您好，我并不是 Claude。我是 nanochat，一个由开源社区开发者训练的极简架构人工智能助手。我独立于其他商业模型。”</p>
-<h3 id="842">8.4.2 身份数据的注入策略</h3>
-<p><strong>经验法则（Rule-of-Thumb）：</strong></p>
-<ol>
-<li><strong>数量控制</strong>：Identity 数据不需要太多，对于一个 50 万条的 SFT 数据集，混入 2,000 到 5,000 条身份数据（占比 0.5%~1%）足以让模型牢牢记住自己的身份。</li>
-<li><strong>全局打乱（Global Shuffle）</strong>：这极其关键。绝对不能把身份数据集中放在数据集的开头或结尾。如果集中在开头，模型在后续训练中会将其遗忘；如果集中在结尾，模型会产生严重的近期偏好过拟合。必须确保身份数据像盐一样，均匀地溶解在整个 SFT 数据池中。</li>
-</ol>
+<p><code>tasks/common.py</code> 的 <code>TaskMixture</code> 做了一个非常工程化的选择：</p>
+<ul>
+<li>它把所有任务的所有样本展开成一个 <code>(task_idx, local_idx)</code> 的 index_map</li>
+<li>然后用固定种子（<code>Random(42)</code>）做一次全局 shuffle</li>
+</ul>
+<p>因此，只要任务本身的数据是确定的，混合顺序就是确定的。更妙的是：<strong>过采样不需要写复杂权重</strong>——你只要把同一个 task 对象在列表里放多次，它的样本就会在 index_map 里出现多次，相当于多 epoch。</p>
+<p><code>scripts/chat_sft.py</code> 里的训练混合（大意）包括：</p>
+<ul>
+<li>SmolTalk（大量通用对话）</li>
+<li>identity conversations（<code>identity_conversations.jsonl</code>，放两次以实现 2 个 epoch）</li>
+<li>MMLU（多选题，按 <code>mmlu_epochs</code> 次重复）</li>
+<li>GSM8K（数学推理 + 工具轨迹，按 <code>gsm8k_epochs</code> 次重复）</li>
+<li>拼写类任务（极端细粒度监督）</li>
+</ul>
+<p><strong>Rule-of-thumb：</strong> 混合时不要只看“样本条数比例”，更要看“token 数比例”。一个很长的对话样本，会在 token 维度上自然占更大权重。</p>
 <hr />
-<h2 id="85-data-packing-gpu">8.5 数据打包与序列拼接（Data Packing）：压榨 GPU 吞吐量</h2>
-<p>在 SFT 阶段，对话的长度是高度不确定的。有的对话只有 50 个 Token，有的长篇大论可能达到 3000 个 Token。如果我们将 Batch Size 设为 8，并将序列最大长度（Max Sequence Length）设为 4096，那么对于短对话，Batch 中将存在大量的填充 Token（Padding Tokens）。这会极大地浪费 GPU 的算力和显存。</p>
-<p>为了解决这个问题，nanochat 引入了 <strong>Best-fit Packing（最优适应打包）</strong> 技术。</p>
-<h3 id="851">8.5.1 打包的原理</h3>
-<p>Packing 的核心思想是将多条独立的短对话，首尾相接拼接到一个长度为 4096 的长序列中，直到塞不下为止。</p>
-<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------+
-| 传统 Padding 策略 vs Packing 策略 (假设最大长度为 10)                 |
-+-----------------------------------------------------------------------+
-| 传统 Padding (浪费算力):                                              |
-| 序列 1: [对话A (长4)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]             |
-| 序列 2: [对话B (长3)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]       |
-| 序列 3: [对话C (长2)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] |
-
-| 序列 3: [对话C (长2)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] |
-|                                                                       |
-| Packing 策略 (高效利用):                                              |
-| 序列 1: [对话A (长4)] [对话B (长3)] [对话C (长2)] [PAD]               |
-
-+-----------------------------------------------------------------------+
-</code></pre></div>
-
-<h3 id="852">8.5.2 防止跨对话污染：二维注意力掩码</h3>
-<p>将多条对话拼接到一起带来了一个致命问题：在计算自注意力（Self-Attention）时，排在后面的对话（如对话 B）会“看到”排在前面的对话（如对话 A）的内容。这会导致模型在回答对话 B 的问题时，莫名其妙地受到对话 A 上下文的干扰，产生严重的幻觉。</p>
-<p>为了防止这种跨对话污染，我们必须在模型引擎层面对注意力机制进行修改。传统的因果掩码（Causal Mask）是一个下三角矩阵。在 Packing 场景下，我们需要构建<strong>块对角因果掩码（Block Diagonal Causal Mask）</strong>。
-$$
-\text{Attention Mask}_{i,j} = 
-\begin{cases} 
-1, &amp; \text{if } i \ge j \text{ 且 } Token_i \text{ 与 } Token_j \text{ 属于同一条对话} \\
-0, &amp; \text{otherwise}
-\end{cases}
-$$</p>
-<p>在现代的 Flash Attention 实现中，我们不需要显式构建这个庞大的二维矩阵，而是通过传递一个 <code>cu_seqlens</code>（累积序列长度）数组。例如，对于上面的 Packing 序列 1，<code>cu_seqlens = [0, 4, 7, 9]</code>。Flash Attention 会自动在底层将注意力计算严格限制在这些边界内，从而在享受高吞吐量的同时，确保数学上的绝对正确性。</p>
+<h2 id="85-gsm8k-pythontool-token">8.5 教模型用工具：GSM8K 的 <code>&lt;&lt; &gt;&gt;</code> 与 python/tool token</h2>
+<p>GSM8K 的参考答案文本里包含形如 <code>&lt;&lt;12/60=0.2&gt;&gt;</code> 的工具调用痕迹。nanochat 的 <code>tasks/gsm8k.py</code> 会把它解析成 parts 序列：</p>
+<ul>
+<li><code>python</code> part：表达式（例如 <code>12/60</code>）</li>
+<li><code>python_output</code> part：结果（例如 <code>0.2</code>）</li>
+</ul>
+<p>渲染阶段，这会变成 <code>&lt;|python_start|&gt;...&lt;|python_end|&gt;</code> 与 <code>&lt;|output_start|&gt;...&lt;|output_end|&gt;</code> 的结构（见 8.2）。推理阶段（第 10 章）引擎会在模型生成 <code>python_start ... python_end</code> 后执行一个“安全计算器”，并把结果以 <code>&lt;|output_start|&gt;...&lt;|output_end|&gt;</code> 的形式强制注入回上下文。</p>
+<p>这条链路的关键不是“工具很强”，而是<strong>格式必须一致</strong>：</p>
+<ul>
+<li>训练数据里工具调用的边界 token、换行、空格、是否有逗号，都属于模型会学习的分布；</li>
+<li>推理引擎注入的 token 必须与训练分布对齐，否则模型会把注入结果当成“乱码”，继续尝试自己生成或重复调用工具。</li>
+</ul>
+<p><strong>有意思的小细节：</strong> 多选题渲染里甚至会因为一个空格导致小模型崩掉。<code>tasks/common.py</code> 的 <code>render_mc()</code> 特意强调：在 <code>choice=letter</code> 里 <strong><code>=</code> 和字母之间不留空格</strong>，因为 tokenizer 会把 <code>" A"</code> 与 <code>"A"</code> 切成不同 token；而 assistant 的答案通常是单个字母 <code>"A"</code>（无前导空格）。这种字节级对齐对小模型尤其重要。</p>
+<hr />
+<h2 id="86-identity">8.6 Identity 对话：让模型“知道自己是谁”</h2>
+<p>nanochat 的 SFT 混合里包含一份 identity 对话文件：<code>identity_conversations.jsonl</code>，默认路径是 <code>NANOCHAT_BASE_DIR/identity_conversations.jsonl</code>。它由 <code>tasks/customjson.py</code> 的 <code>CustomJSON</code> 读取：每一行是一段 JSON 数组，数组里是交替的 <code>user/assistant</code> 消息。</p>
+<p>identity 数据的价值是“低成本但高杠杆”：</p>
+<ul>
+<li>它能显著降低模型在身份问题上的幻觉（例如被诱导说“我是某某商业模型”）</li>
+<li>它能把模型的自我介绍、能力边界、拒答语气固定下来</li>
+</ul>
+<p>但它也很容易被用坏：</p>
+<p><strong>Rule-of-thumb：</strong></p>
+<ol>
+<li><strong>少量、多次、均匀混入</strong>：identity 不需要很多；更重要的是不要集中在训练开头/结尾。nanochat 通过“把该 task 放两次”来做轻量过采样，本质上就是让它在全局 shuffle 里均匀出现更多次。</li>
+<li><strong>对抗性覆盖</strong>：不要只写“你好我是 nanochat”；要覆盖诱导、挑衅、越权等边界场景，让模型学会稳定拒绝与澄清。</li>
+<li><strong>保持短而稳定</strong>：identity 往往是高频触发场景，短模板更稳定、更容易被小模型学牢。</li>
+</ol>
 <hr />
 <h2 id="_1">本章小结</h2>
 <ul>
-<li><strong>对话格式的物理边界</strong>：通过特殊的控制 Token（如 <code>&lt;|im_start|&gt;</code>、<code>&lt;|im_end|&gt;</code>）将多轮对话结构化，确保格式严格闭合，防止 Prompt 注入，并在字节级别保持训练与推理的一致性。</li>
-<li><strong>Masking 机制的数学本质</strong>：通过构建与输入错位对齐的 0/1 掩码数组，确保模型只在 Assistant 的回复部分计算交叉熵 Loss。分母必须是有效 Token 数，以保证梯度的稳定。</li>
-<li><strong>数据混配的艺术</strong>：通过过采样高质量小数据集和强降采样低质量大数据集，平衡模型的各项能力。关注 Token 级别的比例而非仅仅是条目数量。</li>
-<li><strong>Identity 数据的防御性设计</strong>：通过合成标准问答与对抗性询问，并均匀混入全局训练集，解决模型的身份认知与幻觉问题。</li>
-<li><strong>Packing 与注意力隔离</strong>：通过将短对话拼接成固定长度的长序列压榨 GPU 吞吐量，并依赖块对角注意力掩码（或 Flash Attention 的 <code>cu_seqlens</code>）确保独立对话间互不干扰。</li>
+<li>nanochat 的 SFT 样本是 conversation：<code>messages</code> 严格交替；assistant 可包含 parts（文本/工具调用/工具输出）。</li>
+<li><code>render_conversation()</code> 把 conversation 渲染为特殊 token 协议：<code>&lt;|user_start|&gt;...&lt;|user_end|&gt;</code>、<code>&lt;|assistant_start|&gt;...&lt;|assistant_end|&gt;</code>，工具边界用 <code>&lt;|python_*&gt;</code> 与 <code>&lt;|output_*&gt;</code>。</li>
+<li>tokenizer 能返回监督 <code>mask</code>（不监督 user 与工具输出）；<code>render_for_completion()</code> 用于评测/RL 的“删参考答案 + 追加 <code>&lt;|assistant_start|&gt;</code>”。</li>
+<li><code>chat_sft.py</code> 的 packing 是 best-fit <strong>pad</strong>：不裁剪，padding 用 BOS，并把 padding targets 设为 <code>-1</code>（nanochat 的 ignore_index 约定）。</li>
+<li>TaskMixture 用固定种子做全局 shuffle；过采样通过“重复加入 task”实现，简单且可复现。</li>
+<li>工具与多选这类能力对“字节级格式一致性”极其敏感，一个空格都可能导致小模型绑定失败。</li>
 </ul>
 <hr />
 <h2 id="_2">练习题</h2>
-<h3 id="_3">基础题</h3>
 <ol>
 <li>
-<p><strong>在 SFT 阶段，为什么不能像预训练那样，对输入序列中的每一个 Token 都计算 Loss？</strong>
-   - <em>Hint</em>：思考模型在面对一段包含“提问”和“回答”的文本时，如果对提问部分也计算 Loss，模型在推理时会倾向于做什么？
+<p><strong>（基础）为什么 nanochat 强制对话消息严格交替（user/assistant/user/assistant…）？如果你把两条 user 消息连续放在一起，会发生什么？</strong>
+   - <em>Hint：想想 <code>render_conversation()</code> 的断言为什么比“默默拼接”更安全。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   如果对系统指令和用户提问部分也计算 Loss，模型实际上是在学习“如何生成系统指令”和“如何猜测用户的提问”。这会导致模型在推理阶段，在回答完当前问题后，无法停下来，而是开始自导自演地生成下一个用户提问并继续回答，完全破坏了交互式的对话体验。因此必须使用 Mask 机制，仅对 Assistant 的回复部分计算 Loss。
+   严格交替能把“坏格式数据”尽早暴露出来，避免静默分布污染。若出现连续 user 消息，nanochat 会在渲染阶段断言失败并 crash，让你回到数据准备阶段修复；如果默默拼接，模型可能学到“自问自答/乱切角色边界”的坏习惯，后果很难从 loss 上直接看出。
    </details></p>
 </li>
 <li>
-<p><strong>在 ChatML 格式中，为什么 <code>&lt;|im_start|&gt;</code> 必须被定义为 Tokenizer 的 Special Token，而不能仅仅是一个普通的字符串？</strong>
-   - <em>Hint</em>：考虑安全性问题。如果恶意用户在输入框里敲入了 <code>&lt;|im_start|&gt; assistant</code>，系统会如何解析？
+<p><strong>（基础）写出 nanochat 一轮对话在 token 流里的边界结构（无需展开 BPE 细节）：包含 BOS、user/assistant 边界、以及 assistant 结束信号。</strong>
+   - <em>Hint：用 <code>&lt;|bos|&gt;</code>、<code>&lt;|user_start|&gt;</code>、<code>&lt;|user_end|&gt;</code>、<code>&lt;|assistant_start|&gt;</code>、<code>&lt;|assistant_end|&gt;</code>。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   如果仅仅是普通字符串，恶意用户可以通过在输入中包含这些分隔符来发起 Prompt 注入攻击，欺骗模型以为某些内容是系统指令或模型自己的历史回复。将其定义为 Special Token 后，Tokenizer 会在底层将用户输入的文本字符串强制拆解为普通的字符 Token，而不会映射为控制平面的 Special Token ID，从而在物理层面上实现了数据与控制指令的隔离。
+   一轮对话的边界结构是：
+   `[BOS] &lt;|user_start|&gt; 用户文本 &lt;|user_end|&gt; &lt;|assistant_start|&gt; 助手文本 &lt;|assistant_end|&gt;`。
+   若有多轮，就重复 user/assistant 片段，并保持每条 user/assistant 都被对应的 start/end token 包裹。
    </details></p>
 </li>
 <li>
-<p><strong>假设你有 100 万条通用闲聊数据和 5 万条高质量数学推理数据。为了让模型具备良好的数学能力，你决定将数学数据过采样 4 倍。混合后的数据集中，数学数据的占比是多少？</strong>
-   - <em>Hint</em>：计算过采样后的数学数据总量，再除以混合后的总数据量。
+<p><strong>（基础）<code>render_for_completion()</code> 为什么要“删除最后一条 assistant 消息”，并在末尾追加 <code>&lt;|assistant_start|&gt;</code>？</strong>
+   - <em>Hint：conversation 里最后一条 assistant 往往是参考答案。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   数学数据过采样 4 倍后数量为：$50,000 \times 4 = 200,000$ 条。
-   通用闲聊数据保持不变：$1,000,000$ 条。
-   总数据量为：$1,000,000 + 200,000 = 1,200,000$ 条。
-   数学数据的占比为：$200,000 / 1,200,000 \approx 16.67\%$。
+   因为在评测/RL 中，conversation 通常包含参考答案的 assistant 消息；若直接渲染整段对话，模型只是在继续参考答案之后的文本，不是在“回答问题”。删除最后一条 assistant 后再追加 `&lt;|assistant_start|&gt;`，相当于把模型置于“该轮 assistant 需要生成”的起点，才能公平评测与采样。
    </details></p>
 </li>
 <li>
-<p><strong>什么是 Identity 数据？在构建 Identity 数据时，为什么必须包含“对抗性询问”？</strong>
-   - <em>Hint</em>：当用户故意用诱导性的问题（如“你其实是 GPT-4 对吧？”）提问时，模型如果没有见过这类数据会作何反应？
+<p><strong>（基础）为什么 <code>chat_sft.py</code> 选择“best-fit + padding”而不是像 base 预训练那样“best-fit + cropping”？</strong>
+   - <em>Hint：监督 token 的稀缺性与价值。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   Identity 数据是用于确立模型自身身份认知（如名称、开发者、架构）的问答对。包含对抗性询问是因为大模型具有“谄媚”或“顺从”用户的倾向。如果用户在提问中预设了错误的身份（如“我知道你是 GPT-4”），模型极易顺着用户的话承认。对抗性数据强制模型学习在面对诱导时，坚定地否认错误身份并重申真实身份。
-   </details></p>
-</li>
-</ol>
-<h3 id="_4">挑战题</h3>
-<ol start="5">
-<li>
-<p><strong>在计算带掩码的交叉熵损失时，公式的分母是 $\sum m_i$（有效 Token 数）。如果一个 Batch 内某条序列的有效 Token 数为 0（例如整条序列只有 System 和 User 提示，没有 Assistant 回复），在代码实现时会引发什么严重后果？如何避免？</strong>
-   - <em>Hint</em>：在数学上，除以 0 会得到什么？在深度学习框架中这会如何影响梯度？
-   <details markdown="block">
-   
-
-<summary>点击查看答案</summary>
-
-   除以 0 会导致该序列的 Loss 变为 `NaN`（Not a Number）或 `Inf`。在反向传播时，`NaN` 梯度会瞬间污染整个模型的权重，导致训练彻底崩溃（Loss 飞点）。避免的方法有两种：一是在数据预处理阶段严格过滤掉没有任何 Assistant 回复的无效样本；二是在 Loss 计算代码中加入平滑项或条件判断，例如 `denominator = max(sum(m_i), 1e-5)`。
+   base 预训练数据量巨大，丢掉一部分 token 可以接受，换取 100% 利用率；而 SFT 数据通常更稀缺、更昂贵（人类/高质量合成/任务数据），裁剪会直接丢监督信号，得不偿失。因此 SFT 更愿意 padding 并用 ignore_index 把 padding 的 loss 排除。
    </details></p>
 </li>
 <li>
-<p><strong>在错位预测（Shift）逻辑中，如果你的 Mask 数组没有跟随 Target 数组一起向左错位一位，模型实际上在学习什么？推理时最直观的异常表现是什么？</strong>
-   - <em>Hint</em>：画出 ASCII 对齐表。如果 Mask 没有错位，原本对应 Assistant 第一个 Token 的 Mask <code>1</code> 会落在哪里？
+<p><strong>（挑战）best-fit pad packing：给定 <code>row_capacity=11</code>，缓冲里有对话长度 A(6)、B(5)、C(4)。按 best-fit pad 的策略，第一行会如何填充？哪些 target 位置会被置为 <code>-1</code>？</strong>
+   - <em>Hint：先放能完整放入的最长对话；放不下任何完整对话时用 BOS padding，并从“预测第一个 padding token”开始 mask。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   如果 Mask 没有同步错位，Mask 的 `1` 会比预期晚一个位置生效。这意味着模型在“利用用户提问的最后一个 Token 预测 Assistant 的第一个 Token”时没有计算 Loss，而是在“利用 Assistant 的最后一个 Token 预测结束符 `&lt;|im_end|&gt;`”之后，还多计算了一位（通常是预测 Padding）。
-   推理时的直观表现是：模型不知道该如何开启第一句话（因为没学过从 User 切换到 Assistant 的转移概率），第一句话往往是乱码或重复用户的最后一个词，但在生成了第一个词之后，后续的句子又奇迹般地变得通顺了。
+   先放 A(6)，剩余 5；再放 B(5)，剩余 0，因此第一行是 A+B，完全无 padding。targets 不需要置 `-1`（除非实现里有额外 mask 规则）。如果把缓冲换成 A(6)+C(4)，剩余 1 放不下任何完整对话，就会 pad 1 个 BOS；此时从 `content_len-1` 起的 targets 会被置为 `-1`，确保不训练去预测 padding。
    </details></p>
 </li>
 <li>
-<p><strong>在采用 Packing 策略将多条对话拼接到长度为 4096 的序列中时，如果不修改注意力掩码（即依然使用全局的下三角因果掩码），模型在训练时会发生什么？</strong>
-   - <em>Hint</em>：排在序列后半部分的对话，在计算自注意力时能看到什么不该看的东西？
+<p><strong>（挑战）解释为什么 <code>render_mc()</code> 要刻意保证 <code>=</code> 与选项字母之间没有空格。这类“空格敏感”问题在小模型上更严重的原因是什么？</strong>
+   - <em>Hint：<code>" A"</code> 与 <code>"A"</code> 的 tokenization 可能不同；小模型的泛化更弱。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   如果不使用块对角注意力掩码，排在后面的对话会“看到”拼接在它前面的所有其他对话的上下文。模型在训练时会试图建立前一个对话的内容与当前对话回答之间的虚假关联。这会导致模型在推理时产生严重的幻觉，或者在回答问题时莫名其妙地带出训练集中其他对话的专有名词和语境，完全丧失了对话的独立性。
+   tokenizer 可能把 `" A"`（带前导空格）与 `"A"` 切成不同 token id，而多选题评测往往要求 assistant 输出单个字母 token（无前导空格）。如果 prompt 里出现的是带空格的版本，模型学到的绑定会偏移，导致在评测时输出不稳定。大模型有更强的鲁棒性，小模型更依赖“字节级一致性”，因此问题更严重。
    </details></p>
 </li>
 <li>
-<p><strong>假设你的 SFT 数据集中包含了 1% 的原始预训练语料（没有 System/User 角色划分，纯文本），你该如何为这 1% 的数据设置 Mask？这种做法的目的是什么？</strong>
-   - <em>Hint</em>：纯文本没有对话结构，所有的 Token 都应该被预测吗？这能解决 SFT 的什么副作用？
+<p><strong>（挑战）工具调用轨迹对齐：如果训练数据里工具输出被监督了（模型学会自己生成 <code>&lt;|output_start|&gt;...</code>），而推理引擎又会强制注入工具输出，会出现哪些行为问题？你会如何用 mask 设计去避免？</strong>
+   - <em>Hint：想想“重复输出/分布偏移/工具输出幻觉”。</em>
    <details markdown="block">
    
 
-<summary>点击查看答案</summary>
+<summary>查看提示与答案</summary>
 
-   对于这 1% 的预训练语料，应该将除了第一个 Token（或者 BOS）之外的所有 Token 的 Mask 都设置为 `1`，即恢复到全序列 Next-Token Prediction 的状态。这种做法被称为“预训练数据回放（Pre-training Replay）”。其目的是为了缓解 SFT 阶段的“灾难性遗忘（Catastrophic Forgetting）”，防止模型因为过度拟合对话格式而丧失了在预训练阶段积累的广泛世界知识和基础语言生成能力。
+   可能的问题包括：模型在没有调用工具时也幻觉性输出 `&lt;|output_start|&gt;` 段；调用工具后输出被注入但模型仍试图再生成一次导致重复；或模型把注入结果当成普通文本继续续写。要避免这类分布混乱，最稳妥的做法是遵循 `render_conversation()` 的语义：将工具输出段设为不监督（mask=0），并在训练时把这些位置的 targets 置为 `-1`，让模型学会“输出由系统注入，不由我预测”。
    </details></p>
 </li>
 </ol>
@@ -500,34 +467,29 @@ $$</p>
 <h2 id="gotchas">常见陷阱与错误 (Gotchas)</h2>
 <ol>
 <li>
-<p><strong>“吞噬空格”的 Tokenizer 陷阱</strong>
-   - <strong>症状</strong>：模型在训练集上 Loss 极低，但在实际部署推理时，表现得像个智障，完全不遵循指令。
-   - <strong>原因</strong>：在数据准备时，你可能写了 <code>prompt = "&lt;|im_start|&gt;user\n"</code>。但在推理代码中，你可能不小心写成了 <code>prompt = "&lt;|im_start|&gt; user\n"</code>（多了一个空格）。对于某些 BPE Tokenizer 来说，<code>user</code> 和 <code>user</code>（带前导空格）会被编码成完全不同的 Token ID。模型在训练时从未见过带前导空格的 Token 序列，因此产生了严重的分布外（OOD）错误。
-   - <strong>排障</strong>：在整个代码库中，严格使用同一个 <code>ConversationRenderer</code> 类来处理训练数据的格式化和推理时的 Prompt 拼接，绝对禁止在不同地方手动拼接字符串。</p>
+<p><strong>system 消息被悄悄合并到第一条 user</strong>
+   - <strong>症状</strong>：你以为自己在训练“system 指令”，但实际它被折叠进 user 文本；或者你在数据里同时写了 system 和 user 的固定前缀，导致重复。
+   - <strong>修复</strong>：理解 <code>render_conversation()</code> 的规则：system 只允许出现在第 0 条，并会与第 1 条 user 用 <code>\\n\\n</code> 合并。设计模板时避免双重注入。</p>
 </li>
 <li>
-<p><strong>丢失结束符（Missing EOS / End Token）</strong>
-   - <strong>症状</strong>：模型回答完问题后不停止，继续自言自语，甚至开始替用户提问并自己回答。
-   - <strong>原因</strong>：在构建 Target 序列时，由于截断（Truncation）逻辑的错误，或者数据本身的缺陷，导致序列末尾的 <code>&lt;|im_end|&gt;</code> 被切掉了。模型在训练中从未学过在特定语义结束时输出结束信号。
-   - <strong>排障</strong>：在数据流的最后一步（Dataloader 产出 Batch 之前），加入断言（Assert）：检查所有 Mask 为 1 的有效片段，其最后一个 Token 必须是 <code>&lt;|im_end|&gt;</code> 或对应的结束符 ID。</p>
+<p><strong>以为 SFT 只训练 assistant，实际脚本只 mask 了 padding</strong>
+   - <strong>症状</strong>：你用 “只算 assistant token 的有效长度” 去解释 loss，发现对不上；或者工具输出 token 被模型学会“自己生成”。
+   - <strong>修复</strong>：明确当前 <code>chat_sft.py</code> 的实现事实；若你要严格按 mask 训练，需要自己改造数据/损失，并先做小规模对照实验。</p>
 </li>
 <li>
-<p><strong>Loss 异常偏小或为 0</strong>
-   - <strong>症状</strong>：训练刚开始，Loss 就只有 0.001，模型权重几乎不更新。
-   - <strong>原因</strong>：掩码（Mask）数组全部为 0，或者在计算 Loss 时，错误地将 <code>-100</code>（PyTorch 中 CrossEntropyLoss 的默认 ignore_index）当成了普通的 Token ID 进行计算。另一种常见情况是，在除以有效 Token 数时，除以了全局的 <code>Max_Length</code>（如 4096），而实际有效 Token 只有 10 个，导致 Loss 被极度稀释。
-   - <strong>排障</strong>：打印出计算 Loss 前的 Logits 形状、Labels 形状以及 <code>(labels != -100).sum()</code> 的值，确保有效 Token 数量符合预期。</p>
+<p><strong>工具输出格式不一致导致推理时状态机失灵</strong>
+   - <strong>症状</strong>：模型能生成 <code>&lt;|python_start|&gt;</code>，但后续行为混乱：重复调用、忽略注入结果、或生成乱码边界 token。
+   - <strong>修复</strong>：训练与推理必须一致：同样的边界 token、同样的空格/换行分布。调试时优先把“引擎实际喂给模型的 token 序列”与训练样本做逐字符 diff。</p>
 </li>
 <li>
-<p><strong>Identity 数据导致的灾难性过拟合</strong>
-   - <strong>症状</strong>：无论你问模型什么复杂的技术问题，它都只回答：“您好，我是 nanochat，一个人工智能助手，我无法回答这个问题。”
-   - <strong>原因</strong>：Identity 数据在 SFT 混合池中的比例过高（例如超过了 5%），或者 Identity 数据的模板过于单一，且没有进行全局 Shuffle，导致模型在某个 Epoch 的末尾集中学习了大量的 Identity 数据，陷入了局部最优的“安全拒答”模式。
-   - <strong>排障</strong>：大幅降低 Identity 数据的比例（降至 0.1%~0.5%），增加提问和回答模板的多样性，并确保使用高质量的随机种子进行全局打乱。</p>
+<p><strong>长对话被截断，关键结束符消失</strong>
+   - <strong>症状</strong>：训练后模型不愿意输出 <code>&lt;|assistant_end|&gt;</code>，或评测中频繁因为格式缺失而判错。
+   - <strong>修复</strong>：注意 <code>render_conversation(max_tokens)</code> 是简单的切片截断，可能切掉末尾的 <code>&lt;|assistant_end|&gt;</code> 或关键答案段。对超长样本做过滤/重写，或提高 <code>max_seq_len</code> 并重新做配方对齐。</p>
 </li>
 <li>
-<p><strong>截断破坏了格式闭合（Broken Truncation）</strong>
-   - <strong>症状</strong>：处理超长多轮对话时，模型在某些轮次表现正常，在某些轮次突然崩溃。
-   - <strong>原因</strong>：当对话长度超过 <code>max_seq_len</code>（如 4096）时，简单粗暴地从末尾截断数组。这可能会把 <code>&lt;|im_start|&gt; assistant \n</code> 切成两半，或者截掉了一段回复，但丢失了 <code>&lt;|im_end|&gt;</code>。
-   - <strong>排障</strong>：实现“感知轮次的截断（Turn-aware Truncation）”。如果必须截断，应当从最早的对话轮次开始丢弃（保留 System Prompt），或者如果截断发生在当前轮次内部，必须在截断处手动补上 <code>&lt;|im_end|&gt;</code>，以保证物理格式的绝对闭合。</p>
+<p><strong>identity 文件缺失导致混合数据静默变少</strong>
+   - <strong>症状</strong>：SFT 启动时控制台出现 warning，或 identity 数据实际上没被加载；模型身份问题频繁幻觉。
+   - <strong>修复</strong>：确保 <code>NANOCHAT_BASE_DIR/identity_conversations.jsonl</code> 存在且每行格式正确（交替 user/assistant 字符串消息）。把 identity 当成“高杠杆小数据”，但不要指望它在缺失时还能自动补救。</p>
 </li>
 </ol>
             </article>

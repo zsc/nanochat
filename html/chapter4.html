@@ -81,14 +81,14 @@
                     <div class="tree-item " >
                         <a href="chapter5.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                            <span class="tree-title">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动）</span>
                         </a>
                     </div>
                 
                     <div class="tree-item " >
                         <a href="chapter6.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                            <span class="tree-title">第 6 章：喂数这件事（Parquet→Token→(B,T)、DDP 分片、BOS 对齐 best-fit、断点续训）</span>
                         </a>
                     </div>
                 
@@ -102,7 +102,7 @@
                     <div class="tree-item " >
                         <a href="chapter8.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、render/mask、任务混合、best-fit pad、identity 与工具）</span>
                         </a>
                     </div>
                 
@@ -116,7 +116,7 @@
                     <div class="tree-item " >
                         <a href="chapter10.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、采样、工具、CLI/Web）</span>
                         </a>
                     </div>
                 
@@ -130,7 +130,7 @@
                     <div class="tree-item " >
                         <a href="chapter12.html" class="tree-link">
                             <span class="tree-icon">📄</span>
-                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（把问题拆成「token × 吞吐 × 数值」三条线）</span>
                         </a>
                     </div>
                 
@@ -276,17 +276,28 @@ Token IDs: [15496, 11, 4521, 8932, 0, 843, 67]
 </code></pre></div>
 
 <h3 id="422-token">4.2.2 特殊 Token 的设计与隔离：控制面与数据面的分离</h3>
-<p>在预训练的后期以及监督微调（SFT）和强化学习（RL）阶段，我们需要向模型传递大量的<strong>结构化控制信号</strong>。例如：</p>
+<p>在预训练的后期以及监督微调（SFT）和强化学习（RL）阶段，我们需要向模型传递大量的<strong>结构化控制信号</strong>。nanochat 把这些控制信号全部做成一小组“特殊 token”，集中定义在 <code>nanochat/tokenizer.py</code> 的 <code>SPECIAL_TOKENS</code>，默认包括：</p>
 <ul>
-<li><code>&lt;|endoftext|&gt;</code>：宣告一篇预训练文档的彻底结束，防止模型将两篇无关文档的上下文强行关联。</li>
-<li><code>&lt;|im_start|&gt;</code> 和 <code>&lt;|im_end|&gt;</code>：在 ChatML 格式中，用于精确标记用户（User）、助手（Assistant）或系统（System）发言的起始与终止。</li>
-<li><code>&lt;|tool_call|&gt;</code>：触发外部工具调用的硬性指令。</li>
+<li><code>&lt;|bos|&gt;</code>：文档/对话行的起始分隔符（同时也被用作若干场景的 padding/终止信号）</li>
+<li><code>&lt;|user_start|&gt;</code> / <code>&lt;|user_end|&gt;</code>：用户消息边界</li>
+<li><code>&lt;|assistant_start|&gt;</code> / <code>&lt;|assistant_end|&gt;</code>：助手消息边界（<code>&lt;|assistant_end|&gt;</code> 也是推理时常用的停止 token）</li>
+<li><code>&lt;|python_start|&gt;</code> / <code>&lt;|python_end|&gt;</code>：助手触发“计算器工具”的代码块边界</li>
+<li><code>&lt;|output_start|&gt;</code> / <code>&lt;|output_end|&gt;</code>：工具返回结果的边界（通常不希望把这段输出当作监督信号）</li>
 </ul>
-<p>这些被称为<strong>特殊 Token（Special Tokens）</strong>。在计算机网络的术语中，普通文本构成了“数据面（Data Plane）”，而特殊 Token 构成了“控制面（Control Plane）”。这两者必须被绝对隔离。</p>
-<p>如果特殊 Token 的处理机制与普通文本相同，灾难就会降临。假设用户在聊天输入框中恶意输入了 <code>&lt;|im_end|&gt;</code> 字符串，如果 Tokenizer 只是盲目地将其当作普通文本进行 BPE 编码，或者更糟的是，将其识别为了控制信号，那么模型就会误以为用户的发言已经结束，甚至被诱导执行非预期的指令（这被称为 Prompt Injection 攻击）。</p>
-<p>在 nanochat 的实现中，特殊 Token 享有最高的解析优先级，且被<strong>硬编码隔离</strong>。当 Tokenizer 扫描输入字符串时，它会首先使用一个高效的字典树（Trie）或精确匹配算法，将所有注册过的特殊 Token 完整地提取出来，并直接赋予它们预留的特殊词表 ID（通常位于词表的末尾，例如 ID 100256 到 100270）。只有在剔除了这些特殊 Token 之后，剩余的纯文本才会被送入前文所述的正则预切分和 BPE 合并流水线。</p>
-<p><strong>Rule-of-Thumb（经验法则）</strong>：
-在处理 SFT 数据集时，必须确保你的数据加载器（DataLoader）在调用 Tokenizer 时，明确禁用了将普通文本解析为特殊 Token 的功能（通常通过 <code>allowed_special=set()</code> 参数控制）。特殊 Token 只能由你的代码逻辑显式地拼接进去，绝不能由用户的输入文本隐式触发。</p>
+<p>在术语上，你可以把普通文本视为“数据面（Data Plane）”，把特殊 token 视为“控制面（Control Plane）”。区别在于：数据面来自外部语料与用户输入，控制面来自你对训练/推理协议的设计。两者必须保持清晰的工程边界，否则数据准备与推理服务会被“格式注入”与“格式漂移”反复折磨。</p>
+<p>一个容易踩坑的历史遗留是：很多开源模型（尤其是 GPT-2 系列）把文档分隔符叫作 <code>&lt;|endoftext|&gt;</code>。nanochat 为了减少歧义，在自训 tokenizer 中统一使用 <code>&lt;|bos|&gt;</code>，但在加载外部 tokenizer 时会把 <code>&lt;|endoftext|&gt;</code> 当作 BOS 来兼容（这也是为什么你会在代码里看到对两者的并存讨论）。</p>
+<p><strong>实现细节：两条编码路径</strong></p>
+<p>nanochat 没有“让 tokenizer 在普通文本里自动识别并注入 special token”的魔法开关，而是刻意把编码分成两条路径：</p>
+<ul>
+<li><strong>普通文本</strong>：走 <code>encode(...)</code>（RustBPETokenizer 内部使用的是 tiktoken 的普通文本编码路径），把一切输入当作字节序列来编码。</li>
+<li><strong>特殊 token</strong>：只能通过 <code>encode_special("&lt;|assistant_end|&gt;")</code> 这种“精确匹配”拿到 token id，或在 API 上用 <code>prepend=</code> 等参数显式插入。</li>
+</ul>
+<p>这带来两个实际收益：</p>
+<ol>
+<li><strong>格式更稳定</strong>：控制 token 不会被正则切分或 BPE 合并“误伤”，也不会被语料统计改写语义边界。</li>
+<li><strong>默认更安全</strong>：外部输入（尤其是 WebUI 的用户内容）通常不会被“解释成控制信号”，降低用户在文本里夹带形如 <code>&lt;|...|&gt;</code> 的字符串导致协议错乱的风险。</li>
+</ol>
+<p><strong>有意思的小细节（与后续章节强相关）</strong>：在默认 <code>vocab_size=32768</code> 的 RustBPE tokenizer 下，special tokens 会被放在词表尾部的一小段连续 id 中（数量等于 <code>SPECIAL_TOKENS</code> 的长度）。这让你在排查“模型为什么突然输出一堆控制符”时，可以用一个很简单的经验：<strong>如果某个 token id 非常接近词表上界，先怀疑它是 special token，而不是自然语言子串</strong>。</p>
 <h3 id="423-compression-ratio">4.2.3 压缩率 (Compression Ratio)：模型视野的放大器</h3>
 <p>评估一个 Tokenizer 优劣的最直观工程指标是<strong>压缩率（Compression Ratio, CR）</strong>。它衡量的是 Tokenizer 将原始文本信息压缩到离散 Token 序列中的效率。其数学定义非常简单，即原始文本编码为 UTF-8 后的总字节数，除以最终生成的 Token 总数：</p>
 <p>$$ CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}} $$
@@ -333,7 +344,7 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 <ul>
 <li><strong>GPT-4 风格 Byte-Level BPE</strong>：通过将文本降维至 256 个基础 UTF-8 字节，彻底消除了 OOV（未登录词）问题。</li>
 <li><strong>正则预切分（Split Pattern）</strong>：在 BPE 合并前强制划定逻辑边界（如分离标点、限制数字连续长度），防止跨语义的“脏合并”，提升模型的泛化与数学能力。</li>
-<li><strong>特殊 Token 的隔离</strong>：控制面（如 <code>&lt;|im_start|&gt;</code>）必须与数据面（普通文本）严格隔离。特殊 Token 享有最高解析优先级，不参与正则切分与 BPE 合并，防止 Prompt Injection 与格式崩溃。</li>
+<li><strong>特殊 token 体系</strong>：nanochat 用 <code>&lt;|bos|&gt;</code>、<code>&lt;|user_start|&gt;</code>/<code>&lt;|user_end|&gt;</code>、<code>&lt;|assistant_start|&gt;</code>/<code>&lt;|assistant_end|&gt;</code>、<code>&lt;|python_start|&gt;</code>/<code>&lt;|python_end|&gt;</code>、<code>&lt;|output_start|&gt;</code>/<code>&lt;|output_end|&gt;</code> 显式编码对话与工具边界；特殊 token 应由渲染器/上层逻辑显式插入，而不是让外部文本“碰巧触发”。</li>
 <li><strong>压缩率 ($CR$)</strong>：定义为 $CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}}$。高压缩率能成倍放大模型的有效上下文窗口，但过大的词表会导致长尾 Token 训练不充分及显存暴涨。</li>
 <li><strong>BPB (Bits Per Byte)</strong>：跨 Tokenizer 比较模型能力的“度量衡”。通过消除词表大小带来的预测难度差异，真实反映模型的信息压缩极限。计算公式为 $BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}}}$。</li>
 </ul>
@@ -430,16 +441,16 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 <p><strong>陷阱 1：词表大小未对齐导致吞吐暴跌</strong></p>
 <ul>
 <li><strong>现象</strong>：模型训练速度异常缓慢，GPU 利用率波动大，且 <code>nvidia-smi</code> 显示的算力利用率远低于预期。</li>
-<li><strong>原因</strong>：添加特殊 Token 后，词表大小（如 32003）不是 64 或 128 的整数倍，导致矩阵乘法无法高效利用 Tensor Cores。</li>
-<li><strong>Rule-of-Thumb</strong>：在构建模型配置时，永远编写一段防御性代码，将最终的 <code>vocab_size</code> 向上取整到 64 的倍数（例如 <code>vocab_size = (vocab_size + 63) // 64 * 64</code>）。</li>
+<li><strong>原因</strong>：如果 Embedding/LM Head 的词表维度没有按硬件友好的粒度对齐（常见是 64 的倍数），某些矩阵乘法会更难跑满 Tensor Cores。nanochat 的 <code>GPT</code> 会自动把词表向上 padding 到 64 的倍数，并在前向里把 logits 切回真实 <code>vocab_size</code>，以兼顾吞吐与数值语义；但如果你自己改动了这段逻辑，就要重新关注对齐问题。</li>
+<li><strong>Rule-of-Thumb</strong>：当你观察到“算子没跑满”且瓶颈落在 Embedding/LM Head 的 GEMM 上时，优先检查词表维度是否被 padding 到 64 的倍数，以及 logits 是否在输出侧正确裁剪回真实词表。</li>
 </ul>
 </li>
 <li>
 <p><strong>陷阱 2：特殊 Token 泄漏（Prompt Injection）</strong></p>
 <ul>
-<li><strong>现象</strong>：在 SFT 训练后，模型在与用户对话时突然提前停止生成，或者输出了内部的控制字符（如 <code>&lt;|im_end|&gt;</code>）。</li>
-<li><strong>原因</strong>：数据准备阶段，没有在 Tokenizer 调用中禁用特殊 Token 解析。用户输入中包含的恶意控制字符串被 Tokenizer 识别成了真实的控制信号。</li>
-<li><strong>Rule-of-Thumb</strong>：在处理任何外部不可信文本时，调用 <code>tokenizer.encode(text, allowed_special=set())</code>。确保控制信号只能由系统代码通过字符串拼接或直接插入 ID 的方式加入。</li>
+<li><strong>现象</strong>：在 SFT 训练后，模型在与用户对话时突然提前停止生成，或者输出了内部的控制字符（如 <code>&lt;|assistant_end|&gt;</code>），导致上层状态机误判“该结束了”。</li>
+<li><strong>原因</strong>：最常见的根因不是 tokenizer 的数学问题，而是<strong>协议边界被上层逻辑打破</strong>：你把外部输入当成“已经渲染好的对话片段”，直接拼进上下文（或允许用户把控制串混入系统 prompt），导致模型在控制面上看到意外的 token 模式。</li>
+<li><strong>Rule-of-Thumb</strong>：对外部不可信输入只做“普通文本编码”，特殊 token 一律由系统显式插入；如果你的应用场景允许用户粘贴包含 <code>&lt;|...|&gt;</code> 的文本，建议在 UI/服务端对这类模式做转义或告警。</li>
 </ul>
 </li>
 <li>
@@ -462,8 +473,8 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 <p><strong>陷阱 5：SFT 数据打包（Packing）时丢失 EOS Token</strong></p>
 <ul>
 <li><strong>现象</strong>：模型在对话推理时变成了“话痨”，永远不会主动停止生成，直到达到最大长度限制。</li>
-<li><strong>原因</strong>：在将多条短对话拼接（Packing）成一条长序列以提升训练效率时，忘记在每条对话的末尾手动追加 <code>&lt;|im_end|&gt;</code> 或 <code>&lt;|endoftext|&gt;</code> Token。模型在训练中从未学过“何时该闭嘴”。</li>
-<li><strong>Rule-of-Thumb</strong>：在构建 SFT DataLoader 时，仔细检查拼接逻辑。打印出前 3 个 Batch 的解码文本，肉眼确认每段逻辑对话的末尾是否都明确存在终止 Token。</li>
+<li><strong>原因</strong>：在 nanochat 的对话协议中，<code>&lt;|assistant_end|&gt;</code> 是最关键的“轮次闭合”标记（Engine 也常用它作为停止条件）。如果你的数据准备在截断/拼接时把 <code>&lt;|assistant_end|&gt;</code> 丢了，或者把它错误地当作 padding/无效 token 掩码掉，模型就学不会在正确的时机生成结束信号。</li>
+<li><strong>Rule-of-Thumb</strong>：检查每条训练对话在逻辑上是否“闭合”：每个 assistant 回复都必须以 <code>&lt;|assistant_end|&gt;</code> 收尾；如果你引入了工具输出（<code>&lt;|output_start|&gt;...&lt;|output_end|&gt;</code>），还要确认工具输出段不会被模型当作必须预测的“金标准”（详见第 10 章的强制注入机制）。</li>
 </ul>
 </li>
 <li>
@@ -477,7 +488,7 @@ $$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{byte
 </ul>
             </article>
             
-            <nav class="page-nav"><a href="chapter3.html" class="nav-link prev">← 第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</a><a href="chapter5.html" class="nav-link next">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算） →</a></nav>
+            <nav class="page-nav"><a href="chapter3.html" class="nav-link prev">← 第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</a><a href="chapter5.html" class="nav-link next">第 5 章：预训练配方（主旋钮：`depth`，其余尽量自动） →</a></nav>
         </main>
     </div>
 </body>

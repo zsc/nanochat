@@ -84,7 +84,7 @@ $$K = \lceil \frac{N}{M} \rceil$$
 [ 云端 HuggingFace Hub / S3 ]
           │ (多线程并发下载)
           ▼
-[ 本地缓存 NANOCHAT_BASE_DIR/data/fineweb-edu/ ]
+[ 本地缓存 NANOCHAT_BASE_DIR/base_data/ ]
   ├── shard_00000.parquet  ─┐
   ├── shard_00001.parquet   │
   ├── shard_00002.parquet   │ 训练集 (Train Split)
@@ -111,6 +111,13 @@ $$K = \lceil \frac{N}{M} \rceil$$
 
 所有下载的预训练数据、Tokenizer 模型文件以及评估用的基准数据集，都会默认存放在 `~/.cache/nanochat` 目录下。这个行为由核心模块 `nanochat/common.py` 控制。
 
+**源码细节：按需下载的“最小但靠谱”实现**
+
+`nanochat/dataset.py` 把预训练语料视为一组按序编号的 Parquet 分片：文件名形如 `shard_00000.parquet`，并通过 `index -> filename` 的纯函数映射来定位。下载逻辑有几个很工程化的小设计，特别适合写进你自己的数据管道复用：
+1. **存在即跳过**：如果本地已经有对应 shard，就不会重复下载。
+2. **先写临时文件再原子替换**：下载先落到 `.tmp`，完整写完再 `rename` 成正式文件，避免中途中断留下“半个 parquet”污染后续训练。
+3. **指数退避重试**：网络抖动或短暂的 5xx 不会直接让整条训练链路失败。
+
 ### 3.3.1 环境变量 `NANOCHAT_BASE_DIR`
 
 你可以通过设置环境变量 `NANOCHAT_BASE_DIR` 来无缝覆盖这个默认路径。这在实际的集群环境中是必须的操作。
@@ -121,7 +128,7 @@ $$K = \lceil \frac{N}{M} \rceil$$
 
 ### 3.3.2 避免符号链接（Symlink）地狱
 
-如果你直接使用 HuggingFace 的 `datasets` 库，它默认会在缓存目录中创建复杂的符号链接和基于哈希值的目录结构。为了保证“最小可读、最小可改”，nanochat 的数据准备脚本（如 `dev/repackage_data_reference.py`）通常会将数据显式地重新打包并复制到结构清晰的 `NANOCHAT_BASE_DIR/data/` 目录下，彻底摆脱对隐藏缓存机制的依赖。你所见即所得，所有的 `.parquet` 文件都平铺在明确的目录下。
+如果你直接使用 HuggingFace 的 `datasets` 库，它默认会在缓存目录中创建复杂的符号链接和基于哈希值的目录结构。nanochat 的选择更“朴素但可控”：预训练 shards 直接平铺在 `NANOCHAT_BASE_DIR/base_data/` 下，训练时从这个目录流式读取，不依赖 HF datasets 的隐藏缓存结构。你所见即所得：目录里有多少个 `.parquet`，训练就能读到多少个分片。
 
 ---
 

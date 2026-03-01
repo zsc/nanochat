@@ -150,7 +150,7 @@ $$ \hat{k} = \arg\max_{k} S(C, O_k) $$
 
 ## 7.4 对话与生成评估：ChatCORE 与采样策略
 
-当模型进入 SFT（监督微调）和 RL（强化学习）阶段后，它的行为范式发生了根本改变。它被训练成了能够理解特殊控制 Token（如 `<|im_start|>`、`<|im_end|>`）并遵循指令的对话体。此时，继续使用选择题的似然度评估就显得不够了，我们需要评估其**生成（Generation）**的质量。
+当模型进入 SFT（监督微调）和 RL（强化学习）阶段后，它的输入输出不再是“任意纯文本续写”，而是被训练成在一套明确的控制 Token 边界内生成：用户消息用 `<|user_start|>...<|user_end|>` 包裹，助手消息用 `<|assistant_start|>...<|assistant_end|>` 包裹；如果引入工具，还会出现 `<|python_start|>...<|python_end|>` 以及由引擎注入的 `<|output_start|>...<|output_end|>`。这意味着评估也必须在同一格式下进行，否则你测到的不是“能力”，而是“格式偏移”。
 
 ChatCORE 是 nanochat 的生成式评测套件。它的核心逻辑是：给定一个 Prompt，让模型自由生成一段文本，然后通过精确匹配（Exact Match, EM）或正则表达式提取出核心答案，与标准答案进行比对。
 
@@ -176,14 +176,14 @@ T = 5.0 (平滑):  P = [51.64%, 34.62%, 13.74%] <- 随机性增加
 
 ### 7.4.2 评测与推理的温差
 
-在进行 ChatCORE 评测时，我们追求的是**可复现性**和**模型能力上限的精确测量**。因此，在跑评测脚本（如 `scripts/chat_eval.py`）时，我们强制要求设置 $T=0$（或极小值如 $1e-5$），并关闭 Top-p/Top-k 采样。这确保了只要模型权重不变，每次评测的得分都是绝对一致的。
+在进行 ChatCORE 评测时，我们追求的是**可复现性**和**模型能力上限的精确测量**。在 nanochat 的采样实现（`nanochat/engine.py`）里，随机性主要来自“温度采样”（`temperature>0`）。因此评测时最稳妥的做法是直接设 $T=0$（贪心解码）：此时引擎会对每一步 logits 取 argmax，`top_k` 即使设置也不会改变结果（因为不会进入采样分支）。只要权重、prompt 构造与任务顺序不变，得分就应当是确定的。
 
-然而，在实际的 Chat UI（如 `scripts/chat_web.py`）中与人类交互时，如果 $T=0$，模型往往会显得“干瘪”、“机械”，甚至陷入循环重复（Repetition Loop）。因此，在推理交互时，我们通常设置 $T \in [0.6, 0.8]$，并配合 Top-p $\approx 0.9$ 来截断长尾的低概率乱码，从而在“逻辑严谨”与“语言生动”之间取得平衡。
+然而，在实际的 Chat UI（如 `scripts/chat_web.py`）中与人类交互时，如果 $T=0$，模型往往会显得“干瘪”、“机械”，甚至更容易陷入重复。nanochat 的 CLI/Web 默认使用 $T\approx 0.6\sim 0.8$，并配合 `top_k≈50`：Top-k 的作用是只在概率最高的 K 个 token 内采样，从而压掉长尾的低概率乱码；在 Web 服务端里，`top_k=0` 表示不做 top-k 过滤（直接在全词表采样），并且会对温度、top-k、max tokens 做 clamp 以防滥用。
 
 **Rule-of-thumb**：
 - **评测时**：永远使用 $T=0$（贪心解码）。
-- **聊天时**：使用 $T=0.7$，Top-p=0.9。
-- **写代码/数学推导时**：降低温度，使用 $T \in [0.1, 0.3]$，因为这类任务容错率极低，不需要创造性。
+- **聊天时**：使用 $T \in [0.6, 0.8]$，`top_k≈50`（需要更确定就降温度或直接设 $T=0$）。
+- **写代码/数学推导时**：降低温度（例如 $T \in [0.0, 0.2]$），并可适当减小 `top_k`，因为这类任务容错率极低，不需要“发散探索”。
 
 ---
 
@@ -281,13 +281,14 @@ BPB = 1.0 bits/byte。
 
 - **Gotcha 1：用 Token 级别的 Loss 向同事汇报进展**。
   在团队协作中，如果你说“我的模型 Loss 降到了 1.5，表现很好”，这在工程上是一句废话。因为你的同事可能在用一个词表大小完全不同的 Tokenizer。永远、绝对要使用 BPB 作为跨实验、跨团队比较语言建模能力的唯一指标。
-- **Gotcha 2：评测时忘记应用 Chat 模板（Chat Template）**。
-  在对 SFT 模型进行 ChatCORE 评测时，如果你直接将问题作为纯文本输入，而没有调用 `tokenizer.apply_chat_template`（即缺失了 `<|im_start|>user`、`<|im_end|>` 等关键控制 Token），模型会瞬间“失忆”，表现出断崖式下跌，甚至开始胡言乱语。模型的能力被封印在了特定的格式中。
+- **Gotcha 2：评测时没有按 nanochat 对话格式渲染 prompt**。
+  `scripts/chat_eval.py` 使用 `tokenizer.render_for_completion()` 把任务里的 conversation 渲染成 token 序列：包含 BOS、`<|user_start|>...<|user_end|>` 边界，并在末尾追加 `<|assistant_start|>` 作为待补全起点。如果你把问题当纯文本直接喂给模型，或忘了追加 `<|assistant_start|>`，模型会进入“格式分布外”状态，表现断崖式下跌。Chat 能力往往被封印在这种格式对齐里。
 - **Gotcha 3：BPB 计算时的对数底数错误（Nats vs Bits）**。
   PyTorch 的 `F.cross_entropy` 默认以自然对数 $e$ 为底，计算出的单位是 Nats。如果你在计算 BPB 时忘记除以 $\ln(2)$（约 0.693），你算出的实际上是 Nats Per Byte。由于数值上 Nats Per Byte 比真实的 BPB 小，你会误以为自己的模型压缩率天下无敌，从而在对比 Leaderboard 时产生严重的自我认知偏差。
 - **Gotcha 4：评测生成时的最大长度截断（Max New Tokens 陷阱）**。
-  在进行 ChatCORE 采样时，如果 `max_new_tokens` 设置得太短（例如默认的 50），对于需要长链条推理的任务（如 GSM8K 或 CoT 任务），模型可能在输出最终答案 `<answer>X</answer>` 之前就被引擎强行截断。这会导致正则表达式提取失败，系统将其判为错误（0 分），即使模型的推理过程是完全正确的。务必为推理类评测给予足够的生成长度预算（如 512 或 1024）。
+  在进行 ChatCORE 采样时，如果 `max_new_tokens` 设置得太短，模型可能在输出关键标记之前就被截断：例如 GSM8K 的评测要在生成文本里找到 `####` 后的最终数值；HumanEval 需要足够长的代码补全；多选类任务可能需要模型在末尾稳定地产生单个字母（A/B/C/D）。一旦被截断在这些关键位置之前，即使前面的推理过程看起来正确，也会被判错。务必根据任务类型为评测提供足够的生成长度预算（例如 256/512/1024）。
 - **Gotcha 5：混淆 Base 评测和 Chat 评测的输入范式**。
   Base 评测（CORE）是计算续写选项的概率，它**不需要**也不应该包含 System Prompt 或对话角色标签；而 Chat 评测（ChatCORE）是要求模型生成答案，它**必须**严格对齐 SFT 阶段的对话格式。混用这两种范式（例如用 Chat 模板去测 Base 模型，或者用纯文本去测 Chat 模型）会导致指标完全失效，让你在排障时南辕北辙。
 - **Gotcha 6：Padding Token 参与了 Loss 与 BPB 的计算**。
-  在构建 Batch 数据时，为了对齐张量形状，我们会填充大量的 Padding Token。如果在计算 `F.cross_entropy` 时没有设置 `ignore_index`（通常是 Padding Token 的 ID，或 -100），模型会去预测这些无意义的填充符。由于填充符极易预测，这会人为地、大幅度地拉低你的 Loss 和 BPB，制造出一种“模型学得极快”的虚假繁荣。
+- **Gotcha 6：Padding/特殊 Token 没有被正确排除，导致指标失真**。
+  在构建 Batch 时，padding token 的 targets 必须被置为忽略值；在 nanochat 里，交叉熵的 `ignore_index` 约定是 `-1`。如果你忘了把 padding 对应的 labels 设为 `-1`，模型会大量学习“预测 padding”，从而出现一种虚假的低 loss。BPB 计算还有第二层保护：`evaluate_bpb()` 会用 `token_bytes` 把特殊 token（bytes=0）排除，并忽略所有 `<0` 的 targets；但如果你的 `token_bytes` 写错（把特殊 token 设成了非 0 bytes），BPB 也会被系统性污染。
