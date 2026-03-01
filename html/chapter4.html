@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="4-tokenizergpt-4-bpe-token-bpb">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</h1>
+<h2 id="41">4.1 开篇段落</h2>
+<p>在将海量且非结构化的自然语言文本喂给庞大的神经网络之前，我们必须先跨越一道鸿沟：将连续的字符流转换为离散的、模型能够理解的整数序列。这就是 Tokenizer（分词器）的核心职责。在早期的大语言模型（LLM）发展史中，研究人员尝试过词级别（Word-level）和字符级别（Character-level）的切分方法，但它们要么面临词表爆炸和未登录词（OOV）的困境，要么导致序列过长、计算效率极其低下。</p>
+<p>对于现代模型训练与数据准备人员而言，Tokenizer 绝不仅仅是一个简单的“字符串到整数”的映射黑盒。它位于数据流水线的最前端，其设计直接决定了模型的词表大小、上下文窗口的实际信息承载力、计算效率（FLOPs 的利用率），甚至深刻影响着模型在下游任务（如代码生成、多语言翻译、数学推理）上的表现。在 nanochat 项目中，我们采用的是与 GPT-4 架构高度对齐的字节对编码（Byte-Pair Encoding, BPE）机制。</p>
+<p>本章将从第一性原理出发，深入剖析 nanochat 中的 Tokenizer 实现。我们将探讨它是如何通过底层的 UTF-8 字节流彻底消灭 OOV 问题的，正则预切分（Split Pattern）是如何防止跨逻辑边界的“脏合并”的，以及特殊 Token（Special Tokens）是如何在对话和指令微调中建立坚不可摧的“控制面”的。更重要的是，本章将重点讲解压缩率（Compression Ratio）与每字节信息熵（Bits Per Byte, BPB）这两个核心指标，教你如何穿透表面交叉熵损失（Cross-Entropy Loss）的迷雾，在不同词表大小的模型之间进行绝对公平的能力评估。学习完本章，你将具备从数据准备、模型训练到最终评测的全链路 Tokenizer 调试与调优能力。</p>
+<h2 id="42">4.2 文字论述</h2>
+<h3 id="421-gpt-4-byte-level-bpe">4.2.1 GPT-4 风格的 Byte-Level BPE 机制</h3>
+<p>传统的 BPE 算法直接在 Unicode 字符级别进行统计与合并。这种做法在处理纯英文时勉强够用，但一旦遇到多语言混合、罕见符号或 Emoji，就会导致词表急剧膨胀。如果强行限制词表大小，又会产生大量的未登录词（Out-Of-Vocabulary, OOV），模型只能用一个无意义的 <code>&lt;unk&gt;</code> 标记来代替它们，从而丢失所有语义信息。</p>
+<p>nanochat 采用的 GPT-4 风格 Byte-level BPE（BBPE）优雅地解决了这个问题。它的核心思想是<strong>降维打击</strong>：不以字符为基础，而是将所有文本首先强制编码为底层的 UTF-8 字节流。由于任何计算机文本最终都可以表示为 0 到 255 的字节序列，因此 BBPE 的初始基础词表大小永远固定为 256。这意味着，无论遇到多么罕见的生僻字或外星文，模型至少可以将其拆解为基础字节进行处理，<strong>在 BBPE 的世界里，永远不存在 OOV</strong>。</p>
+<p>然而，如果仅仅允许算法在全文本的字节流上自由统计和合并，会引发严重的灾难。例如，算法可能会发现“单词结尾的 <code>s</code>”、“一个空格”和“下一个单词开头的 <code>t</code>”经常连在一起出现，于是将它们合并成一个跨越单词边界的 Token <code>s t</code>。这种 Token 毫无泛化意义，只会白白浪费宝贵的词表空间。</p>
+<p>为了防止这种现象，GPT-4 风格的 Tokenizer 引入了至关重要的<strong>正则预切分（Split Pattern）</strong>机制。在进行任何 BPE 合并之前，系统会先用一个极其复杂的正则表达式，将原始文本强制“肢解”成多个独立的片段。BPE 的合并操作被严格限制在这些片段内部，绝对不允许跨片段合并。</p>
+<p>这个正则表达式的设计充满了人类的工程智慧。它通常会强制断开以下边界：</p>
+<ol>
+<li><strong>字母与标点符号</strong>：防止单词和紧贴着它的逗号合并。</li>
+<li><strong>不同类型的字符</strong>：将英文字母、数字、汉字严格分开。</li>
+<li><strong>数字的切分</strong>：通常会限制数字最多只能 1 到 3 位连在一起（例如将 <code>123456</code> 强制切分为 <code>123</code> 和 <code>456</code>），这被证明对提升模型的数学计算能力至关重要，因为它迫使模型学习数字的组合规律，而不是死记硬背超大数字的 Token。</li>
+<li><strong>空格的归属</strong>：通常会将前导空格与紧随其后的单词划分在同一个片段中（例如 <code>Hello</code>），这极大地优化了英文句子的编码效率。</li>
+</ol>
+<p>下面是一个多阶段的 ASCII 图解，展示了文本经过 nanochat Tokenizer 处理的完整生命周期：</p>
+<div class="codehilite"><pre><span></span><code>=====================================================================================
+阶段 1：原始文本输入
+=====================================================================================
+Input: &quot;Hello, nanochat! 12345&quot;
+
+=====================================================================================
+阶段 2：正则预切分 (Split Pattern 强制介入，划定不可逾越的边界)
+=====================================================================================
+Pattern 规则：分离标点、分离数字（最多3位一组）、前导空格与单词绑定。
+Splits:  [&quot;Hello&quot;, &quot;,&quot;, &quot; nanochat&quot;, &quot;!&quot;, &quot; 123&quot;, &quot;45&quot;]
+
+=====================================================================================
+阶段 3：UTF-8 字节映射 (降维到 256 基础词表)
+=====================================================================================
+Bytes:
+&quot;Hello&quot;     -&gt; [72, 101, 108, 108, 111]
+&quot;,&quot;         -&gt; [44]
+&quot; nanochat&quot; -&gt; [32, 110, 97, 110, 111, 99, 104, 97, 116]
+&quot;!&quot;         -&gt; [33]
+&quot; 123&quot;      -&gt; [32, 49, 50, 51]
+&quot;45&quot;        -&gt; [52, 53]
+
+=====================================================================================
+阶段 4：BPE 贪心合并 (查阅训练好的 Merge Table，仅在 Split 内部合并)
+=====================================================================================
+Merge 过程示例 (&quot; nanochat&quot; 内部):
+
+1. [110, 97] -&gt; &quot;na&quot;  (高频合并)
+2. [&quot;na&quot;, 110] -&gt; &quot;nan&quot;
+3. [99, 104] -&gt; &quot;ch&quot;
+4. [&quot;nan&quot;, 111] -&gt; &quot;nano&quot;
+5. [&quot;ch&quot;, 97, 116] -&gt; &quot;chat&quot;
+最终合并为: [&quot; nano&quot;, &quot;chat&quot;]
+
+Merged Tokens: [&quot;Hello&quot;, &quot;,&quot;, &quot; nano&quot;, &quot;chat&quot;, &quot;!&quot;, &quot; 123&quot;, &quot;45&quot;]
+
+=====================================================================================
+阶段 5：词表 ID 映射 (输出最终喂给模型的整数序列)
+=====================================================================================
+Token IDs: [15496, 11, 4521, 8932, 0, 843, 67]
+=====================================================================================
+</code></pre></div>
+
+<h3 id="422-token">4.2.2 特殊 Token 的设计与隔离：控制面与数据面的分离</h3>
+<p>在预训练的后期以及监督微调（SFT）和强化学习（RL）阶段，我们需要向模型传递大量的<strong>结构化控制信号</strong>。例如：</p>
+<ul>
+<li><code>&lt;|endoftext|&gt;</code>：宣告一篇预训练文档的彻底结束，防止模型将两篇无关文档的上下文强行关联。</li>
+<li><code>&lt;|im_start|&gt;</code> 和 <code>&lt;|im_end|&gt;</code>：在 ChatML 格式中，用于精确标记用户（User）、助手（Assistant）或系统（System）发言的起始与终止。</li>
+<li><code>&lt;|tool_call|&gt;</code>：触发外部工具调用的硬性指令。</li>
+</ul>
+<p>这些被称为<strong>特殊 Token（Special Tokens）</strong>。在计算机网络的术语中，普通文本构成了“数据面（Data Plane）”，而特殊 Token 构成了“控制面（Control Plane）”。这两者必须被绝对隔离。</p>
+<p>如果特殊 Token 的处理机制与普通文本相同，灾难就会降临。假设用户在聊天输入框中恶意输入了 <code>&lt;|im_end|&gt;</code> 字符串，如果 Tokenizer 只是盲目地将其当作普通文本进行 BPE 编码，或者更糟的是，将其识别为了控制信号，那么模型就会误以为用户的发言已经结束，甚至被诱导执行非预期的指令（这被称为 Prompt Injection 攻击）。</p>
+<p>在 nanochat 的实现中，特殊 Token 享有最高的解析优先级，且被<strong>硬编码隔离</strong>。当 Tokenizer 扫描输入字符串时，它会首先使用一个高效的字典树（Trie）或精确匹配算法，将所有注册过的特殊 Token 完整地提取出来，并直接赋予它们预留的特殊词表 ID（通常位于词表的末尾，例如 ID 100256 到 100270）。只有在剔除了这些特殊 Token 之后，剩余的纯文本才会被送入前文所述的正则预切分和 BPE 合并流水线。</p>
+<p><strong>Rule-of-Thumb（经验法则）</strong>：
+在处理 SFT 数据集时，必须确保你的数据加载器（DataLoader）在调用 Tokenizer 时，明确禁用了将普通文本解析为特殊 Token 的功能（通常通过 <code>allowed_special=set()</code> 参数控制）。特殊 Token 只能由你的代码逻辑显式地拼接进去，绝不能由用户的输入文本隐式触发。</p>
+<h3 id="423-compression-ratio">4.2.3 压缩率 (Compression Ratio)：模型视野的放大器</h3>
+<p>评估一个 Tokenizer 优劣的最直观工程指标是<strong>压缩率（Compression Ratio, CR）</strong>。它衡量的是 Tokenizer 将原始文本信息压缩到离散 Token 序列中的效率。其数学定义非常简单，即原始文本编码为 UTF-8 后的总字节数，除以最终生成的 Token 总数：</p>
+<p>$$ CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}} $$
+为什么压缩率如此重要？因为它直接决定了模型的<strong>实际视野</strong>和<strong>计算经济性</strong>。
+假设我们训练了一个最大上下文窗口（Context Window）为 8192 个 Token 的模型。</p>
+<ul>
+<li>如果使用一个在特定语料上压缩率为 $2.0$ 的劣质 Tokenizer，模型一次最多只能“看”到 $8192 \times 2.0 = 16384$ 个字节的信息。</li>
+<li>如果使用一个压缩率为 $4.0$ 的优秀 Tokenizer，模型在同样的显存占用和计算量下，能够“看”到 $8192 \times 4.0 = 32768$ 个字节的信息，视野整整扩大了一倍。</li>
+</ul>
+<p>在实际工程中，GPT-4 风格的 Tokenizer 在纯英文语料上的压缩率通常可以稳定在 $3.5$ 到 $4.5$ 之间。然而，由于 BPE 算法是高度依赖于训练语料频率的，如果 Tokenizer 的训练语料中极少包含中文，那么它在处理中文字符时（一个中文字符通常占 3 个 UTF-8 字节），可能无法找到合适的合并规则，最终只能将其拆解为 3 个独立的单字节 Token。此时，中文的压缩率可能会暴跌至 $1.0$ 甚至更低。这不仅会导致模型处理中文时推理速度极慢（因为需要生成大量的 Token），还会严重破坏中文的语义连贯性，增加模型学习的难度。</p>
+<p><strong>权衡（Trade-off）</strong>：
+既然压缩率越高越好，那我们为什么不无限扩大词表大小（例如增加到 100 万），从而把极长的常用短语甚至整个句子都合并成一个 Token 呢？
+答案在于<strong>参数量与训练充分性</strong>的制约。词表大小（Vocab Size, $V$）直接决定了模型输入层的 Embedding 矩阵和输出层的 Logits 投影矩阵的大小（形状均为 $V \times d_{\text{model}}$）。词表过大不仅会吞噬海量的显存，更致命的是，长尾的低频 Token 在整个训练语料中出现的次数极少，它们的 Embedding 向量根本无法得到充分的梯度更新，最终成为模型中的“死神经元”。因此，在 nanochat 的设计哲学中，词表大小通常被控制在 32,000 到 128,000 之间，以在压缩率和训练稳定性之间取得最佳平衡。</p>
+<h3 id="424-bpb-bits-per-byte">4.2.4 BPB (Bits Per Byte)：跨模型评估的“度量衡”</h3>
+<p>在模型训练过程中，我们习惯于观察验证集上的交叉熵损失（Cross-Entropy Loss）来判断模型的收敛情况。交叉熵损失衡量的是模型预测下一个 Token 的难度。然而，<strong>直接比较两个使用不同 Tokenizer 的模型的 Loss 是毫无意义的，甚至会得出完全相反的结论</strong>。</p>
+<p>假设我们有两个模型：</p>
+<ul>
+<li><strong>模型 A</strong>：词表大小 32,000，Tokenizer 压缩率为 3.0。验证集 Loss 为 2.5。</li>
+<li><strong>模型 B</strong>：词表大小 100,000，Tokenizer 压缩率为 4.0。验证集 Loss 为 3.0。</li>
+</ul>
+<p>如果只看 Loss，模型 A 似乎更好（2.5 &lt; 3.0）。但这是因为模型 A 的词表小，单个 Token 包含的信息少，预测起来自然更容易。模型 B 虽然 Loss 高，但它的每一个 Token 承载了更多的文本信息。为了在统一的物理尺度下公平比较它们的语言建模能力，信息论为我们提供了一个终极标准：<strong>BPB（Bits Per Byte）</strong>。</p>
+<p>BPB 衡量的是：<strong>模型在预测这段文本时，平均每预测一个原始字节，需要消耗多少个比特（Bits）的信息量</strong>。BPB 越低，说明模型对该数据集的内在规律掌握得越好，压缩/预测能力越强。</p>
+<p>BPB 的推导过程如下：</p>
+<ol>
+<li>深度学习框架（如 PyTorch）默认计算的交叉熵 Loss 是以自然常数 $e$ 为底的，其单位是 nats（奈特）。</li>
+<li>
+<p>我们首先需要将 Loss 从 nats 转换为以 2 为底的 bits。根据换底公式，只需要除以 $\ln(2)$ 即可。此时得到的是<strong>每个 Token 的平均比特数（Bits Per Token）</strong>：
+$$ \text{Bits Per Token} = \frac{\text{Loss}}{\ln(2)} $$</p>
+</li>
+<li>
+<p>接下来，我们需要将“每 Token”转换为“每字节”。由于压缩率 $CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}}$，这意味着平均每个 Token 对应着 $CR$ 个字节。因此，我们将 Bits Per Token 除以压缩率 $CR$，即可得到 BPB：
+$$ BPB = \frac{\text{Bits Per Token}}{CR} = \frac{\text{Loss}}{\ln(2) \times CR} $$
+将上述公式展开，我们可以得到一个在代码实现中更为稳健的计算形式，它直接使用总 Loss 的累加值、总 Token 数和总字节数：
+$$ BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}}} $$</p>
+</li>
+</ol>
+<p>让我们回到刚才的例子：</p>
+<ul>
+<li>模型 A 的 BPB：$BPB_A = \frac{2.5}{\ln(2) \times 3.0} \approx \frac{2.5}{0.693 \times 3.0} \approx 1.20$ bits/byte。</li>
+<li>模型 B 的 BPB：$BPB_B = \frac{3.0}{\ln(2) \times 4.0} \approx \frac{3.0}{0.693 \times 4.0} \approx 1.08$ bits/byte。</li>
+</ul>
+<p>经过 BPB 的转换，真相大白：<strong>模型 B 的实际语言建模能力显著强于模型 A</strong>（1.08 &lt; 1.20）。在 nanochat 及整个 LLM 工业界（如 Llama、Mistral 的评测中），BPB 是预训练阶段跨架构、跨词表比较的唯一事实标准。</p>
+<h2 id="43">4.3 本章小结</h2>
+<ul>
+<li><strong>GPT-4 风格 Byte-Level BPE</strong>：通过将文本降维至 256 个基础 UTF-8 字节，彻底消除了 OOV（未登录词）问题。</li>
+<li><strong>正则预切分（Split Pattern）</strong>：在 BPE 合并前强制划定逻辑边界（如分离标点、限制数字连续长度），防止跨语义的“脏合并”，提升模型的泛化与数学能力。</li>
+<li><strong>特殊 Token 的隔离</strong>：控制面（如 <code>&lt;|im_start|&gt;</code>）必须与数据面（普通文本）严格隔离。特殊 Token 享有最高解析优先级，不参与正则切分与 BPE 合并，防止 Prompt Injection 与格式崩溃。</li>
+<li><strong>压缩率 ($CR$)</strong>：定义为 $CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}}$。高压缩率能成倍放大模型的有效上下文窗口，但过大的词表会导致长尾 Token 训练不充分及显存暴涨。</li>
+<li><strong>BPB (Bits Per Byte)</strong>：跨 Tokenizer 比较模型能力的“度量衡”。通过消除词表大小带来的预测难度差异，真实反映模型的信息压缩极限。计算公式为 $BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}}}$。</li>
+</ul>
+<h2 id="44">4.4 练习题</h2>
+<p><strong>基础题</strong></p>
+<ol>
+<li>
+<p><strong>OOV 问题的根源与解决</strong>
+    在早期的 Word-level Tokenizer 中，为什么会频繁出现 <code>&lt;unk&gt;</code>（未知词）标记？nanochat 采用的 Byte-level BPE 是如何从数学/编码层面彻底消灭这个问题的？
+    <em>Hint：思考计算机底层是如何存储所有人类字符的。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    早期 Word-level Tokenizer 基于完整的单词建立词表，由于人类语言的单词组合无限（尤其是存在各种拼写错误、新造词和多语言），有限的词表永远无法覆盖所有输入，遇到不在词表中的词只能输出 <code>&lt;unk&gt;</code>。Byte-level BPE 将所有文本先编码为 UTF-8 字节流。因为任何合法的文本在计算机底层都由 0-255 这 256 个基础字节组成，BBPE 将这 256 个字节作为初始词表的基石。即使遇到从未见过的生僻词，它也能回退到将其拆解为若干个基础字节输出，因此永远不会遇到无法表示的 OOV。
+    </details></p>
+</li>
+<li>
+<p><strong>压缩率的计算与直觉</strong>
+    一段包含中英文混合的文本，其 UTF-8 编码总长度为 2400 个字节。经过 nanochat 的 Tokenizer 处理后，生成了 800 个 Token。请计算该文本的压缩率。如果模型的最大上下文长度是 4096 个 Token，这段文本会占满上下文吗？
+    <em>Hint：回顾压缩率的定义公式，并计算文本的 Token 数量与上下文长度的关系。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    根据公式 $CR = \frac{N_{\text{bytes}}}{N_{\text{tokens}}}$，压缩率为 $2400 / 800 = 3.0$。这段文本生成了 800 个 Token，而模型的最大上下文长度是 4096 个 Token。因为 800 远小于 4096，所以这段文本不会占满上下文，模型还可以继续接收 $4096 - 800 = 3296$ 个 Token 的信息。
+    </details></p>
+</li>
+<li>
+<p><strong>特殊 Token 的解析优先级</strong>
+    假设我们定义了一个特殊 Token <code>&lt;|system|&gt;</code>，并且在普通文本中也出现了字符串 <code>&lt;|system|&gt;</code>。如果 Tokenizer 没有正确实现隔离机制，而是将其送入了正则预切分和 BPE 流水线，最有可能发生什么情况？
+    <em>Hint：思考正则表达式通常会如何处理尖括号 <code>&lt;</code> 和竖线 <code>|</code> 等标点符号。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    如果未做隔离，正则表达式很可能会将标点符号和字母强行断开。例如，<code>&lt;|system|&gt;</code> 会被切分成 <code>&lt;</code>、<code>|</code>、<code>system</code>、<code>|</code>、<code>&gt;</code> 等多个独立的片段。随后 BPE 算法会分别对这些片段进行编码，最终输出多个零散的普通 Token ID。这样一来，模型接收到的是一串毫无特殊含义的离散符号，根本无法识别出这是一个代表“系统提示词开始”的控制信号，导致 SFT 训练失效或对话格式完全崩溃。
+    </details></p>
+</li>
+<li>
+<p><strong>BPB 的标准转换</strong>
+    在一次预训练评估中，模型在拥有 100 万个 Token（对应 350 万个 UTF-8 字节）的验证集上，计算出的总交叉熵 Loss（基于 nats）为 2,800,000。已知 $\ln(2) \approx 0.693$，请计算该模型在此验证集上的 BPB。
+    <em>Hint：使用包含总 Loss、总 Token 和总字节数的 BPB 展开公式。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    根据公式 $BPB = \frac{\text{Total Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}} \times N_{\text{tokens}}}$（注意：如果总 Loss 已经是所有 Token Loss 的累加和，则平均 Loss 为 $\frac{\text{Total Loss}}{N_{\text{tokens}}}$。这里题目给出的通常是平均 Loss 乘以 Token 数的总和，或者直接使用公式：$BPB = \frac{\text{Average Loss}}{\ln(2) \times CR}$）。
+    假设给出的 2,800,000 是所有 Token 的 Loss 累加值。
+    平均 Loss = $2,800,000 / 1,000,000 = 2.8$ nats/token。
+    压缩率 $CR = 3,500,000 / 1,000,000 = 3.5$ bytes/token。
+    $BPB = \frac{2.8}{0.693 \times 3.5} = \frac{2.8}{2.4255} \approx 1.154$ bits/byte。
+    </details></p>
+</li>
+</ol>
+<p><strong>挑战题</strong></p>
+<ol start="5">
+<li>
+<p><strong>数学能力的 Tokenizer 优化</strong>
+    为什么在 GPT-4 风格的 Tokenizer 中，正则预切分（Split Pattern）通常会强制将连续的数字切分成最多 3 位一组（例如将 <code>19283746</code> 切分为 <code>192</code>, <code>837</code>, <code>46</code>），而不是允许 BPE 算法将它们合并成一个超长的 Token <code>19283746</code>？
+    <em>Hint：思考模型在做加法运算时，如果输入的数字每次都被编码成完全不同且不规律的 Token，模型还能否学到进位规律。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    如果允许 BPE 自由合并数字，高频出现的长数字（如年份 <code>2023</code>、常见邮编）会被合并成单一的 Token，而低频的长数字则会被切分成不可预测的碎片。这会导致模型看到的数字表示极度不一致，破坏了数字的位值原理（Place-value system）。
+    强制将数字切分为最多 3 位一组（或某些模型切分为单数字），迫使模型将大数字视为有规律的数字块序列。这使得模型在学习加减乘除等数学运算时，能够更容易地对齐数字的位数，学习到从低位到高位的进位逻辑，从而大幅提升模型的算术推理能力。
+    </details></p>
+</li>
+<li>
+<p><strong>多语言惩罚与词表污染</strong>
+    团队 A 使用了 99% 的纯英文语料训练了一个词表大小为 32,000 的 Tokenizer。现在团队 B 想用这个 Tokenizer 来训练一个主打中文的模型。请详细分析这会导致的两个严重后果，并说明为什么会发生。
+    <em>Hint：考虑中文在 UTF-8 中的字节长度，以及 BPE 合并表缺乏中文规则时的回退行为。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    后果一：<strong>推理效率极低，上下文窗口严重缩水</strong>。由于 Tokenizer 训练时极少见到中文，BPE 合并表中几乎没有中文字符的合并规则。一个中文字符在 UTF-8 中通常占 3 个字节，它会被 Tokenizer 强行拆解为 3 个独立的单字节 Token。这意味着一段 1000 个汉字的中文文本，会被编码成 3000 个 Token，压缩率跌至 $1.0$ 甚至更低，导致模型处理中文极其缓慢，且能容纳的文本长度大幅缩短。
+    后果二：<strong>语义碎片化，学习难度剧增</strong>。原本一个完整的中文词汇（如“人工智能”）被粉碎成了十几个毫无关联的基础字节 Token。模型必须跨越极长的序列才能将这些底层字节重新组合成高层语义，这极大地增加了注意力机制（Attention）的负担，导致模型很难学好中文的语法和逻辑。
+    </details></p>
+</li>
+<li>
+<p><strong>Loss 对比的陷阱场景</strong>
+    在一次架构选型会议上，工程师小王展示了一张图表：他用同一份训练数据，分别训练了 Llama-Tokenizer（词表 32k）的模型和 Qwen-Tokenizer（词表 152k）的模型。图表显示 Llama 模型的验证集 Loss 为 2.2，而 Qwen 模型的验证集 Loss 为 2.8。小王据此断言：“Llama 模型的内在学习能力远超 Qwen 模型”。请作为资深算法工程师，严厉反驳他的结论，并给出正确的验证方案。
+    <em>Hint：词表大小不同导致预测空间不同。必须引入信息论指标。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    反驳：小王的结论是完全站不住脚的。Loss 衡量的是模型在特定词表空间下预测下一个 Token 的交叉熵。Qwen 的词表（152k）远大于 Llama（32k），这意味着 Qwen 的 Tokenizer 压缩率更高，其单个 Token 包含了更多的文本信息（例如可能把一整个词语甚至短语合成了 1 个 Token）。在一个包含更多信息的 Token 上进行预测，其不确定性（难度）自然更大，Loss 必然更高。但这并不代表模型能力差。
+    正确方案：必须将两个模型的 Loss 统一转换到字节粒度进行比较。需要分别统计评测数据集在 Llama 和 Qwen Tokenizer 下的总字节数和总 Token 数，计算出各自的压缩率 $CR$。然后使用公式 $BPB = \frac{\text{Loss}}{\ln(2) \times CR}$ 计算出两者的 BPB。只有 BPB 更低的模型，才是真正内在学习能力更强、数据压缩效率更高的模型。
+    </details></p>
+</li>
+<li>
+<p><strong>硬件友好的词表填充（Padding）</strong>
+    在 nanochat 的代码中，如果训练出的 Tokenizer 加上特殊 Token 后，总词表大小为 32,005。在初始化模型 Embedding 层时，代码通常会将其强行扩展（Pad）到 32,064。请解释这种做法的底层硬件逻辑。
+    <em>Hint：思考现代 GPU 的 Tensor Core 对矩阵维度的对齐要求。</em>
+    <details markdown="1">
+    <summary>查看答案</summary>
+    现代 GPU（尤其是 NVIDIA 的 Ampere、Hopper 架构）在进行矩阵乘法时，高度依赖张量核心（Tensor Cores）来加速计算。Tensor Cores 对矩阵的维度有严格的对齐要求，通常要求维度是 8、16 或 64 的整数倍才能达到最高吞吐量。
+    如果词表大小是 32,005，模型在计算最后的 Logits 投影（形状为 $d_{\text{model}} \times 32005$）时，由于维度不对齐，GPU 无法满载运行 Tensor Cores，甚至会回退到低效的 CUDA Core 计算，导致训练速度大幅下降。将其向上取整填充到 32,064（64 的倍数），虽然增加了极少量的无效参数，但能完美契合硬件的对齐要求，显著提升计算吞吐（Throughput）。那些多出来的词表 ID 在训练中永远不会被 Tokenizer 输出，其对应的梯度也会被掩码或自然衰减，不会影响模型的正确性。
+    </details></p>
+</li>
+</ol>
+<h2 id="45-gotchas">4.5 常见陷阱与错误 (Gotchas)</h2>
+<ul>
+<li>
+<p><strong>陷阱 1：词表大小未对齐导致吞吐暴跌</strong></p>
+<ul>
+<li><strong>现象</strong>：模型训练速度异常缓慢，GPU 利用率波动大，且 <code>nvidia-smi</code> 显示的算力利用率远低于预期。</li>
+<li><strong>原因</strong>：添加特殊 Token 后，词表大小（如 32003）不是 64 或 128 的整数倍，导致矩阵乘法无法高效利用 Tensor Cores。</li>
+<li><strong>Rule-of-Thumb</strong>：在构建模型配置时，永远编写一段防御性代码，将最终的 <code>vocab_size</code> 向上取整到 64 的倍数（例如 <code>vocab_size = (vocab_size + 63) // 64 * 64</code>）。</li>
+</ul>
+</li>
+<li>
+<p><strong>陷阱 2：特殊 Token 泄漏（Prompt Injection）</strong></p>
+<ul>
+<li><strong>现象</strong>：在 SFT 训练后，模型在与用户对话时突然提前停止生成，或者输出了内部的控制字符（如 <code>&lt;|im_end|&gt;</code>）。</li>
+<li><strong>原因</strong>：数据准备阶段，没有在 Tokenizer 调用中禁用特殊 Token 解析。用户输入中包含的恶意控制字符串被 Tokenizer 识别成了真实的控制信号。</li>
+<li><strong>Rule-of-Thumb</strong>：在处理任何外部不可信文本时，调用 <code>tokenizer.encode(text, allowed_special=set())</code>。确保控制信号只能由系统代码通过字符串拼接或直接插入 ID 的方式加入。</li>
+</ul>
+</li>
+<li>
+<p><strong>陷阱 3：BPB 计算使用了错误的“字节数”</strong></p>
+<ul>
+<li><strong>现象</strong>：计算出的 BPB 异常低（例如小于 0.5），或者在不同数据集上的 BPB 波动极大，无法解释。</li>
+<li><strong>原因</strong>：在计算公式 $BPB = \frac{\text{Loss} \times N_{\text{tokens}}}{\ln(2) \times N_{\text{bytes}}}$ 中，$N_{\text{bytes}}$ 用错了。很多人直接使用了 Python 的 <code>len(text)</code>，这统计的是<strong>字符数（Characters）</strong>而不是<strong>字节数（Bytes）</strong>。对于包含大量中文的文本，字符数远小于 UTF-8 字节数，导致分母变小，BPB 虚高；或者在统计前对文本进行了额外的清洗，导致字节数不匹配。</li>
+<li><strong>Rule-of-Thumb</strong>：计算 $N_{\text{bytes}}$ 时，必须严格使用原始未清洗文本的 UTF-8 编码长度：<code>len(text.encode('utf-8'))</code>。</li>
+</ul>
+</li>
+<li>
+<p><strong>陷阱 4：评测截断导致的 BPB 虚假繁荣（Truncation Bias）</strong></p>
+<ul>
+<li><strong>现象</strong>：模型在长文档验证集上的 BPB 看起来非常优秀，但在实际生成时表现平平。</li>
+<li><strong>原因</strong>：为了适应模型的最大上下文长度（如 2048），评测脚本对验证集文档进行了强行截断。通常，文档的开头部分包含较多的专有名词和不确定性，预测难度大；而文档的后半部分由于上下文已经充分展开，预测难度极低。截断操作丢弃了容易预测的后半部分，导致计算出的整体 Loss 偏高，BPB 失真。</li>
+<li><strong>Rule-of-Thumb</strong>：在计算标准 BPB 时，必须使用滑动窗口（Sliding Window）或将长文档切分为多个连续的 Chunk 并保留所有 Chunk 进行评估，绝对不能简单地丢弃截断部分。</li>
+</ul>
+</li>
+<li>
+<p><strong>陷阱 5：SFT 数据打包（Packing）时丢失 EOS Token</strong></p>
+<ul>
+<li><strong>现象</strong>：模型在对话推理时变成了“话痨”，永远不会主动停止生成，直到达到最大长度限制。</li>
+<li><strong>原因</strong>：在将多条短对话拼接（Packing）成一条长序列以提升训练效率时，忘记在每条对话的末尾手动追加 <code>&lt;|im_end|&gt;</code> 或 <code>&lt;|endoftext|&gt;</code> Token。模型在训练中从未学过“何时该闭嘴”。</li>
+<li><strong>Rule-of-Thumb</strong>：在构建 SFT DataLoader 时，仔细检查拼接逻辑。打印出前 3 个 Batch 的解码文本，肉眼确认每段逻辑对话的末尾是否都明确存在终止 Token。</li>
+</ul>
+</li>
+<li>
+<p><strong>陷阱 6：前导空格（Prefix Space）处理不一致</strong></p>
+<ul>
+<li><strong>现象</strong>：模型在续写文本时，生成的第一个单词总是和前面的单词粘连在一起（例如 <code>helloworld</code>），或者在不该有空格的地方强行换行。</li>
+<li><strong>原因</strong>：GPT 风格的 Tokenizer 通常将空格与后面的单词绑定（如 <code>world</code>）。如果在推理时，给模型的 Prompt 末尾带了一个空格，而模型又预测出了一个自带前导空格的 Token，就会出现双空格；反之，如果 Prompt 末尾没有空格，模型预测出了一个不带前导空格的 Token，就会发生粘连。</li>
+<li><strong>Rule-of-Thumb</strong>：在 Chat UI 或推理引擎中，严格规范 Prompt 的结尾格式。通常建议 Prompt 结尾不留多余空格，让模型自行预测带有前导空格的 Token。</li>
+</ul>
+</li>
+</ul>
+            </article>
+            
+            <nav class="page-nav"><a href="chapter3.html" class="nav-link prev">← 第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</a><a href="chapter5.html" class="nav-link next">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

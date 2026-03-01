@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="9-rlgsm8k-reward">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</h1>
+<h2 id="91">9.1 开篇段落</h2>
+<p>在完成了基础预训练（Base）和监督微调（SFT）之后，我们的模型已经具备了遵循人类指令和进行基本对话的能力。预训练赋予了模型广博的世界知识和语言规律，而 SFT 则教会了模型如何以“助手”的口吻和格式来回答问题。然而，当我们面对诸如数学推理（例如 GSM8K 数据集）、逻辑推导或代码生成等具有明确“对与错”客观标准的任务时，仅仅依靠 SFT 往往是不够的。SFT 的本质是“行为克隆”（Behavioral Cloning），模型只是在被动地模仿人类给出的标准解答轨迹（Teacher Forcing）。这种方式存在两个致命缺陷：第一，它受到“暴露偏差”（Exposure Bias）的影响，模型在训练时总是看到完美的上文，而在推理时一旦自己生成了一个微小的错误，就会不知所措并产生幻觉；第二，它缺乏“探索”（Exploration）机制，模型无法知道“如果我换一种思路解题，结果会不会更好”。</p>
+<p>为了突破这一瓶颈，强化学习（Reinforcement Learning, RL）阶段被引入到大语言模型的训练流水线中。RL 的核心思想是“从试错中学习”：我们不再把标准答案强行喂给模型，而是给模型一个问题（Prompt），让它自己去生成解答（采样）。然后，系统会根据解答的最终结果是否正确，给予一个奖励（Reward）或惩罚。模型通过最大化期望奖励，自发地优化其内部的推理路径。</p>
+<p>本章将带你深入理解 nanochat 中极简且高效的 RL 阶段。为了在单机多卡环境下保持系统的最小可读性和最高吞吐量，nanochat 并没有采用结构极其复杂、需要额外训练庞大价值网络（Value Network/Critic）的传统 PPO（Proximal Policy Optimization）算法。相反，我们采用了一种类似 GRPO（Group Relative Policy Optimization）或带有基线归一化的 REINFORCE 变体算法。我们将重点探讨：如何从 SFT 模型出发进行批量采样、如何通过正则表达式和规则提取答案并计算 Reward、如何利用组内优势归一化（Advantage Normalization）替代复杂的价值网络，以及在整个强化学习过程中，如何通过 KL 散度（Kullback-Leibler Divergence）惩罚来控制模型更新的步子，防止其丧失原有的语言能力。</p>
+<h2 id="92">9.2 文字论述</h2>
+<h3 id="921-rl">9.2.1 极简 RL 流水线：从采样到更新的闭环</h3>
+<p>在 nanochat 的 RL 阶段，训练的最小单位不再是“一条静态的文本数据”，而是一个“动态的交互与优化回合”（Episode）。整个流水线从输入一个数学问题开始，到最终更新模型权重结束，可以清晰地划分为四个核心的工程步骤：</p>
+<ol>
+<li><strong>批量采样（Sampling / Rollout）</strong>：给定一个数学问题（例如来自 GSM8K 的 Prompt），我们将当前的策略模型（Policy Model，即正在训练的模型）设置为推理模式。对于这同一个问题，我们使用带有一定温度（Temperature，通常大于 0，例如 0.7 或 1.0）的采样算法，让模型生成 $K$ 个不同的解答轨迹（Responses）。这 $K$ 个解答代表了模型当前对这个问题的不同探索方向。</li>
+<li><strong>奖励计算（Reward Computation）</strong>：生成完毕后，这 $K$ 个解答会被送入一个基于规则的评分函数中。系统会尝试从每个解答的末尾提取出最终的数学答案，并与数据集提供的标准答案（Ground Truth）进行硬匹配。匹配成功赋予正奖励，匹配失败或格式错误赋予零奖励或负奖励。</li>
+<li><strong>优势估计（Advantage Estimation）</strong>：获得了 $K$ 个原始奖励后，我们需要评估“哪个解答比其他解答更好”。通过计算这 $K$ 个奖励的均值和标准差，我们将绝对的奖励值转化为相对的优势值（Advantage）。优势值为正，说明该解答在当前批次中表现优异；优势值为负，说明表现糟糕。</li>
+<li><strong>策略更新（Policy Update）</strong>：我们将这 $K$ 个解答以及它们对应的优势值重新送入策略模型，计算每个 Token 的对数概率（Log Probability）。结合冻结的参考模型（Reference Model）计算出的 KL 惩罚，我们构建最终的损失函数（Loss），并执行反向传播（Backpropagation）来更新策略模型的权重。</li>
+</ol>
+<p>为了更直观地理解数据在各个组件之间的流动，请参考以下 ASCII 架构示意图：</p>
+<div class="codehilite"><pre><span></span><code>=====================================================================================================
+                                 nanochat RL 流水线 (GRPO-style)
+=====================================================================================================
+
+                                        [ 冻结的参考模型 Reference Model ]
+                                                       │ (提供基础的 Token 概率分布)
+                                                       ▼
+ [ GSM8K 问题 ] ──┬──► (采样 K 次) ──► [ 解答轨迹 1 ] ──┬──► 计算 KL 散度 ──┐
+                  │                                     │                   │
+                  ├──► (采样 K 次) ──► [ 解答轨迹 2 ] ──┼──► 计算 KL 散度 ──┼─► 结合 KL 惩罚
+ [ 策略模型 ] ◄───┤                                     │                   │   的最终 Reward
+ (Policy Model)   │       ...                           │                   │       │
+                  │                                     │                   │       │
+                  └──► (采样 K 次) ──► [ 解答轨迹 K ] ──┴──► 计算 KL 散度 ──┘       ▼
+                                            │                                       │
+                                            ▼                                       │
+                                      [ 规则引擎 ]                                  │
+                                     (正则提取答案)                                 │
+                                            │                                       │
+                                            ▼                                       │
+                                   [ 原始 Reward 1~K ]                              │
+                                            │                                       │
+                                            ▼                                       │
+                                   [ 计算均值与标准差 ]                             │
+                                            │                                       │
+                                            ▼                                       │
+                                 [ 优势归一化 Advantage ] ◄─────────────────────────┘
+                                            │
+                                            ▼
+                               [ 策略梯度损失函数 Loss ] ──► (反向传播更新 Policy 权重)
+=====================================================================================================
+</code></pre></div>
+
+<blockquote>
+<p><strong>Rule-of-Thumb（经验法则）：</strong>
+在跑通 RL 流水线时，第一步永远是<strong>关闭策略更新（设置学习率为 0）</strong>，仅仅让模型空跑“采样 -&gt; 提取 -&gt; 算 Reward”的流程，并把结果打印到日志中。你需要亲眼看到模型生成的文本，以及规则引擎给出的 Reward 是否符合预期。如果规则引擎连正确的答案都提取不出来，后续的任何梯度更新都是在向模型注入纯粹的噪声。</p>
+</blockquote>
+<h3 id="922-reward">9.2.2 基于规则的 Reward 设计：客观任务的红利</h3>
+<p>在传统的 RLHF（Reinforcement Learning from Human Feedback）中，为了评估模型生成的开放式对话（如“如何烤蛋糕”或“写一首诗”），我们需要耗费大量算力训练一个独立的奖励模型（Reward Model）。这个奖励模型本身也是一个庞大的神经网络，它的任务是模拟人类的偏好。</p>
+<p>然而，对于 GSM8K 这样的数学推理任务，我们拥有巨大的“客观任务红利”：<strong>数学题有绝对正确的唯一答案</strong>。因此，在 nanochat 中，我们完全抛弃了神经网络奖励模型，转而使用轻量级、确定性的基于规则的 Reward 函数。这不仅节省了显存，还消除了奖励模型自身的幻觉和偏差。</p>
+<p>规则 Reward 的设计通常包含两个维度的考量：<strong>格式约束</strong>与<strong>结果正确性</strong>。</p>
+<p>为了让系统能够稳定地通过正则表达式提取答案，我们通常在 SFT 阶段就教会模型使用特定的标签来包裹最终答案，例如：
+<code>...经过上述计算，最终答案是：&lt;answer&gt; 42 &lt;/answer&gt;</code>。</p>
+<p>在 RL 阶段，Reward 函数的伪逻辑如下：</p>
+<ol>
+<li><strong>尝试提取</strong>：使用正则表达式 <code>(?&lt;=&lt;answer&gt;).*?(?=&lt;/answer&gt;)</code> 寻找答案。</li>
+<li><strong>格式惩罚</strong>：如果找不到该标签，说明模型没有遵循输出规范，直接给予一个较大的负奖励（例如 $R = -1.0$），并终止该解答的后续评判。</li>
+<li><strong>答案比对</strong>：如果提取到了字符串，将其清理（去除空格、逗号等）后与 Ground Truth 进行比对。</li>
+<li><strong>正确奖励</strong>：如果数值完全相等，给予正奖励（例如 $R = +1.0$）。</li>
+<li><strong>错误惩罚</strong>：如果数值不相等，给予零奖励或轻微的负奖励（例如 $R = 0.0$ 或 $R = -0.1$）。</li>
+</ol>
+<p>通过这种阶梯式的 Reward 设计，模型在训练初期即使算不对数学题，只要能乖乖地输出 <code>&lt;answer&gt;</code> 标签，就能避免受到最严厉的惩罚（从 $-1.0$ 提升到 $0.0$）。这引导模型首先稳定其输出格式，然后再逐步优化其内部的逻辑推理过程以追求 $+1.0$ 的高分。</p>
+<h3 id="923-group-relative-advantage">9.2.3 组内优势归一化（Group Relative Advantage）：抛弃价值网络</h3>
+<p>在标准的 PPO 算法中，为了计算优势函数（Advantage），我们需要一个价值网络（Critic）来预测在当前状态下，模型未来能获得多少期望奖励。优势函数等于实际获得的奖励减去价值网络的预测值。如果实际奖励高于预期，优势为正；反之则为负。然而，引入价值网络意味着我们需要在显存中再塞进一个与策略模型差不多大的神经网络，这在单机多卡环境下往往会导致严重的 OOM（Out Of Memory）。</p>
+<p>nanochat 采用了一种极其优雅的替代方案：<strong>组内优势归一化</strong>。既然我们对同一个 Prompt 采样了 $K$ 个解答，为什么不直接让这 $K$ 个解答互相竞争呢？</p>
+<p>假设对于第 $j$ 个 Prompt，策略模型生成了 $K$ 个回答，经过规则引擎评判后，得到了 $K$ 个原始奖励值：$R_{j,1}, R_{j,2}, ..., R_{j,K}$。</p>
+<p>首先，我们计算这组奖励的经验均值 $\mu_{R_j}$ 和经验标准差 $\sigma_{R_j}$：</p>
+<p>$$ \mu_{R_j} = \frac{1}{K} \sum_{i=1}^K R_{j,i} $$</p>
+<p>$$ \sigma_{R_j} = \sqrt{\frac{1}{K} \sum_{i=1}^K (R_{j,i} - \mu_{R_j})^2} $$
+然后，我们将每个回答的原始奖励转化为归一化的优势值 $A_{j,i}$：
+$$ A_{j,i} = \frac{R_{j,i} - \mu_{R_j}}{\sigma_{R_j} + \epsilon} $$
+其中 $\epsilon$ （例如 $10^{-4}$）是一个极小的常数，用于防止当所有回答的奖励相同时（即标准差为 0）发生除以零的数值溢出错误。</p>
+<p><strong>直觉与物理意义：</strong>
+这个公式的直觉非常深刻。它构建了一个<strong>局部的零和博弈</strong>。假设一道数学题非常难，模型生成的 $K$ 个回答中，有 $K-1$ 个完全没写出格式（$R=-1$），只有 1 个回答虽然算错了，但写对了格式（$R=0$）。在绝对意义上，$0$ 并不是一个好分数。但经过组内归一化后，这个 $R=0$ 的回答的优势值 $A$ 会变成一个很大的正数！这意味着，系统在鼓励模型：“虽然你没算对，但在这批烂苹果里，你是最好的，请继续保持这种格式！”
+反之，如果一道题很简单，模型算对了 $K-1$ 次（$R=1$），只有 1 次算错了（$R=0$）。那么这个 $R=0$ 的回答会获得一个很大的负优势值，受到严厉的惩罚。</p>
+<p>这种自适应的动态基线（Dynamic Baseline）使得模型在任何难度的问题上都能获得有意义的梯度信号，彻底免去了训练额外价值网络的算力与显存开销。</p>
+<blockquote>
+<p><strong>Rule-of-Thumb（经验法则）：</strong>
+采样数量 $K$ 的选择至关重要。如果 $K$ 太小（例如 $K=2$），均值和标准差的统计学意义极弱，优势值会退化为固定的正负值，导致训练剧烈震荡。在显存允许的情况下，$K$ 至少应该设置为 $4$，推荐设置为 $8$ 或 $16$。如果显存不足以支撑大 $K$，请优先调小每卡微批次大小（Device Batch Size），而不是牺牲 $K$。</p>
+</blockquote>
+<h3 id="924-kl">9.2.4 KL 惩罚与参考模型：防止模型“走火入魔”</h3>
+<p>强化学习是一个极其强大的优化器，但它也是非常“短视”和“功利”的。如果我们的目标仅仅是最大化规则 Reward，模型很快就会发现一些作弊的“捷径”（Reward Hacking）。</p>
+<p>例如，模型可能会发现，只要在输出的最后加上 <code>&lt;answer&gt; 42 &lt;/answer&gt;</code>，就有一定概率得分。于是，它可能会彻底忘记如何说人类语言，输出类似 <code>!@#$%^&amp;* &lt;answer&gt; 42 &lt;/answer&gt;</code> 这样的乱码，因为生成乱码可能在某种程度上降低了计算其他 Token 的概率负担。或者，模型为了迎合数学题的严肃性，彻底丧失了 SFT 阶段学到的礼貌用语和对话能力，这被称为“模式崩溃”（Mode Collapse）或“灾难性遗忘”（Catastrophic Forgetting）。</p>
+<p>为了给这匹脱缰的野马套上缰绳，我们需要引入<strong>参考模型（Reference Model）</strong>和<strong>KL 散度惩罚</strong>。</p>
+<p>参考模型通常是 RL 训练开始前那个冻结的 SFT 模型。它的参数在整个 RL 阶段保持绝对不变。在计算策略更新时，对于策略模型生成的每一个 Token $y_t$，我们不仅要看策略模型赋予它的概率 $\pi_\theta(y_t | x, y_{&lt;t})$，还要看参考模型赋予它的概率 $\pi_{ref}(y_t | x, y_{&lt;t})$。</p>
+<p>我们计算这两个概率分布之间的 KL 散度（通常使用近似的 Token 级别 KL）：
+$$ \text{KL}_t = \log \frac{\pi_\theta(y_t | x, y_{&lt;t})}{\pi_{ref}(y_t | x, y_{&lt;t})} = \log \pi_\theta(y_t | \cdot) - \log \pi_{ref}(y_t | \cdot) $$
+如果策略模型生成的某个 Token 概率远远高于参考模型的概率（即 $\text{KL}_t$ 很大），说明策略模型在这个 Token 上偏离了 SFT 阶段的初始行为太远。</p>
+<p>我们将这个 KL 惩罚项从最终的优化目标中扣除。在基于策略梯度的损失函数中，针对单个 Token 的局部目标函数大致可以写为：
+$$ \mathcal{L}_t = - \left( A \cdot \log \pi_\theta(y_t | x, y_{&lt;t}) - \beta \cdot \text{KL}_t \right) $$</p>
+<p>其中：</p>
+<ul>
+<li>$A$ 是我们在 9.2.3 节计算出的该条解答的全局优势值。</li>
+<li>$\beta$ 是 KL 惩罚系数（KL Penalty Coefficient），它是一个极其关键的超参数。</li>
+</ul>
+<p><strong>$\beta$ 的博弈：</strong></p>
+<ul>
+<li>如果 $\beta$ 设置得过大（例如 $0.1$ 或更高），KL 惩罚将主导损失函数。策略模型会被参考模型死死拽住，完全不敢进行任何探索，Reward 曲线将停滞不前。</li>
+<li>如果 $\beta$ 设置得过小（例如 $0.0001$ 或更低），惩罚力度形同虚设。模型会迅速过拟合 Reward 函数，出现严重的 Reward Hacking，输出大量乱码，虽然数学准确率可能在训练集上短暂飙升，但模型的通用语言能力将彻底毁灭。</li>
+<li>在 nanochat 的实践中，$\beta$ 通常被设置在 $0.01$ 到 $0.05$ 之间。</li>
+</ul>
+<h3 id="925">9.2.5 显存与计算的工程权衡</h3>
+<p>在单机多卡环境中跑通上述完整的 RL 流程，最大的拦路虎往往是显存（OOM）。让我们来清点一下 RL 阶段的显存大户：</p>
+<ol>
+<li><strong>策略模型权重（Policy Weights）</strong>：需要保存 FP32/BF16 权重。</li>
+<li><strong>策略模型梯度（Policy Gradients）</strong>：反向传播时产生。</li>
+<li><strong>优化器状态（Optimizer States）</strong>：AdamW 需要保存动量和方差，通常是权重的 2 倍到 4 倍体积。</li>
+<li><strong>参考模型权重（Reference Weights）</strong>：需要加载一个完全相同大小的模型，虽然不需要梯度，但仍占用大量显存。</li>
+<li><strong>KV Cache 与激活值（Activations）</strong>：在生成 $K$ 个解答时，需要维护庞大的 KV Cache；在计算对数概率和反向传播时，需要保存前向传播的激活值。</li>
+</ol>
+<p>为了在有限的显存下活下来，nanochat 采取了以下策略：</p>
+<ul>
+<li><strong>无 Critic 网络</strong>：如前所述，通过组内优势归一化省去了一个庞大的价值网络及其梯度和优化器状态。</li>
+<li><strong>参考模型卸载或量化</strong>：如果显存极度紧张，可以将参考模型放在 CPU 内存中，在需要计算 KL 时再逐层搬运，或者对参考模型进行 8-bit/4-bit 量化（因为我们只需要它的前向概率）。</li>
+<li><strong>生成与训练分离的 Batch Size</strong>：在生成阶段（Sampling），由于没有梯度的负担，我们可以使用较大的 Batch Size 来提高吞吐量；而在训练阶段（Forward/Backward），我们必须严格控制微批次大小，并开启梯度检查点（Gradient Checkpointing）以时间换空间。</li>
+</ul>
+<h2 id="93">9.3 本章小结</h2>
+<ul>
+<li><strong>流水线极简与目标明确</strong>：nanochat 的 RL 阶段专注在具有客观标准的任务（如 GSM8K）上。通过放弃复杂的开放式对话对齐，我们省去了训练 Reward Model 的巨大工程负担，直接依赖正则表达式提取和规则匹配来计算奖励。</li>
+<li><strong>无价值网络的优雅</strong>：通过对同一个 Prompt 采样 $K$ 个回答，利用组内均值和标准差计算归一化优势（Advantage Normalization）。这种局部的零和博弈不仅大幅节省了显存，还提供了极其稳定、自适应的梯度基线。</li>
+<li><strong>稳定性与能力的护城河</strong>：依赖冻结的参考模型（Reference Model）提供 Token 级别的 KL 散度惩罚。这是防止策略模型在追求高分的过程中发生能力崩塌（Mode Collapse）、输出乱码或破坏 SFT 格式的最后一道防线。</li>
+<li><strong>对 SFT 质量的强依赖</strong>：RL 并不是魔法。如果 SFT 模型在 $K$ 次采样中连一次正确的格式都写不出来，或者一次答案都算不对，RL 的优势归一化将失去意义（所有 Advantage 趋近于 0），模型将陷入冷启动失败的死局。RL 的作用是“放大”模型已有的微弱能力，而不是凭空“创造”能力。</li>
+</ul>
+<h2 id="94">9.4 练习题</h2>
+<h3 id="_1">基础题</h3>
+<ol>
+<li><strong>在 nanochat 的 RL 阶段，为什么我们需要对同一个 Prompt 采样 $K$ 个不同的回答，而不是像 SFT 那样只处理一条数据？</strong>
+<em>Hint：思考如果不采样多个回答，我们如何知道当前回答是“好”还是“坏”？如果没有价值网络，基线（Baseline）从何而来？</em>
+<details markdown="1"></li>
+</ol>
+<summary>点击查看答案</summary>
+<p>采样 K 个回答是为了在组内建立一个局部的性能基线（Baseline）并探索解题空间。由于我们没有独立的价值网络来预测绝对的期望收益，只能通过比较这 K 个回答的相对表现（计算均值和方差）来判断哪个回答更好。表现高于均值的获得正向优势值（Advantage），低于均值的获得负向优势值。此外，多次采样也给予了模型尝试不同推理路径的机会，从而可能偶然发现正确的解法。
+</details></p>
+<ol start="2">
+<li><strong>针对 GSM8K 任务，基于规则的 Reward 函数在设计时，为什么通常要区分“格式正确性”和“答案正确性”？</strong>
+<em>Hint：如果模型一开始完全算不对题，只给算对的题发奖励，模型能学到东西吗？</em></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>区分这两个维度是为了构建“阶梯式”的奖励信号（Reward Shaping）。在 RL 初期，模型的推理能力可能很弱，如果只对最终答案正确的样本给予奖励，奖励信号将极其稀疏，模型会陷入盲目探索。通过引入“格式正确性”的奖励（或减轻惩罚），模型可以先学会遵循输出规范（例如使用特定的标签包裹答案）。一旦格式稳定，模型就能持续获得格式分，并在此基础上进一步优化内部的逻辑推理，以追求答案完全正确的最高分。</p>
+</details>
+<ol start="3">
+<li><strong>在组内优势归一化公式 $A_{j,i} = \frac{R_{j,i} - \mu_{R_j}}{\sigma_{R_j} + \epsilon}$ 中，常数 $\epsilon$ 的核心作用是什么？</strong>
+<em>Hint：假设模型对某道题的 K 个回答全部错误，且格式全错，此时的 $R_{j,i}$ 全部等于 -1。分母会发生什么？</em></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>$\epsilon$ 是一个极小的平滑常数（例如 1e-4 或 1e-5），其核心作用是防止在计算归一化优势时发生除以零（Division by Zero）的数值溢出错误。当 K 个回答的奖励完全相同时（例如全部回答错误，Reward 均为 -1），这组数据的标准差 $\sigma_{R_j}$ 为 0。此时 $\epsilon$ 保证了分母不为零，使得所有优势值 $A_{j,i}$ 稳定地趋近于 0。优势值为 0 意味着这批数据不会产生任何无效或爆炸的梯度更新，从而保护了训练的数值稳定性。</p>
+</details>
+<ol start="4">
+<li><strong>参考模型（Reference Model）在 RL 阶段的参数会更新吗？它和 KL 散度惩罚之间是什么关系？</strong>
+<em>Hint：参考模型代表了模型在哪个阶段的状态？我们希望策略模型离它越远越好，还是保持一定距离？</em></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>参考模型在整个 RL 阶段是完全冻结的，它的参数绝对不会更新。它通常是 RL 训练开始前保存的 SFT 模型权重。它和 KL 散度惩罚的关系是：参考模型作为策略模型（Policy Model）的“行为锚点”。在每一步更新时，我们计算策略模型输出的概率分布与参考模型输出的概率分布之间的 KL 散度。如果差异过大，就会在损失函数中施加惩罚。这迫使策略模型在追求更高 Reward 的同时，不能偏离 SFT 阶段学到的通用人类语言和对话规范太远。</p>
+</details>
+<h3 id="_2">挑战题</h3>
+<ol start="5">
+<li><strong>假设为了节省显存，我们将采样数量 $K$ 强行设置为 2。请从统计学和梯度优化的角度，详细分析这会对优势归一化和训练过程产生什么严重的负面影响。</strong>
+<em>Hint：思考 $K=2$ 时，均值和标准差的意义。如果两个回答一好一坏，归一化后的优势值会是什么样？这能反映出回答“好多少”吗？</em></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>当 K=2 时，样本量极小，均值和标准差的估计完全失去了统计学意义。
+假设两个回答的奖励不同（一好一坏），例如 $R_1=1$, $R_2=0$。计算均值为 0.5，标准差为 0.5。归一化后的优势值 $A_1 = (1-0.5)/0.5 = 1$， $A_2 = (0-0.5)/0.5 = -1$。
+你会发现，无论 $R_1$ 和 $R_2$ 的绝对差距是 1 还是 100，只要它们不相等，归一化后的优势值永远是固定的 +1 和 -1（忽略 $\epsilon$ 的情况下）。这意味着梯度失去了“幅度”信息，模型无法知道某个回答是“稍微好一点”还是“好极了”，导致优化方向极其僵硬。此外，K=2 导致探索空间极度狭窄，模型很难在复杂的推理路径中碰巧找到正确的解法，极易陷入局部最优。</p>
+</details>
+<ol start="6">
+<li><strong>什么是“奖励黑客”（Reward Hacking）？如果模型在训练中发现，只要输出毫无逻辑的乱码（例如 <code>a b c d &lt;answer&gt; 42 &lt;/answer&gt;</code>），由于乱码的生成概率极低，反而能绕过某些惩罚并获得正确答案的 Reward。除了调节 KL 惩罚，我们还能在工程上做哪些具体的干预来缓解这个问题？</strong>
+<em>Hint：思考是否可以在 Reward 函数本身加入对“过程”的约束，而不仅仅是看最后的结果？</em></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>“奖励黑客”是指模型找到了某种违背人类意图的捷径，以一种作弊的方式获得了高额的 Reward。
+除了增大 KL 惩罚系数 $\beta$ 之外，我们可以在工程上对 Reward 函数进行“塑形”（Reward Shaping）：</p>
+<ol>
+<li>长度惩罚：如果提取到答案前的推理过程字符数少于某个阈值，直接扣除大量分数，强制模型必须“写出步骤”。</li>
+<li>困惑度（Perplexity）过滤：使用一个轻量级的语言模型评估推理过程的困惑度。如果困惑度极高（说明是乱码），则判定为无效解答，给予负奖励。</li>
+<li>步骤关键词匹配：检查推理过程中是否包含“因为”、“所以”、“计算”等逻辑连接词，缺乏则降低奖励权重。</li>
+</ol>
+</details>
+<ol start="7">
+<li><strong>在公式 $\mathcal{L}_t = - \left( A \cdot \log \pi_\theta(y_t | x, y_{&lt;t}) - \beta \cdot \text{KL}_t \right)$ 中，如果我们将 KL 惩罚系数 $\beta$ 设置得非常大（例如 $\beta = 10.0$），训练曲线（如 Reward 和 Loss）会出现什么现象？为什么？</strong>
+<em>Hint：当 $\beta$ 极大时，损失函数的主导项变成了什么？模型的最优策略是什么？</em>
+<details markdown="1"></li>
+</ol>
+<summary>点击查看答案</summary>
+<p>如果将 $\beta$ 设置得非常大，损失函数将完全由 KL 惩罚项主导。此时，模型的最优策略（为了最小化 Loss）就是让策略模型的概率分布 $\pi_\theta$ 无限逼近参考模型的概率分布 $\pi_{ref}$，即 $\text{KL}_t \to 0$。
+表现在训练曲线上：</p>
+<ol>
+<li>KL 散度曲线会迅速下降并死死贴近于 0。</li>
+<li>模型的 Reward 曲线将停滞不前，呈现一条水平的直线，因为模型完全不敢进行任何偏离 SFT 行为的探索去争取更高的 Advantage。</li>
+<li>
+<p>策略模型的权重几乎不会发生实质性的改变，整个 RL 阶段变成了一场毫无意义的空跑。
+</details></p>
+</li>
+<li>
+<p><strong>假设在 RL 训练的第一个 Epoch，由于 SFT 模型的数学能力极差，导致在某个 Prompt 下 $K=8$ 个采样的最终答案全部错误，且格式也全错。此时这 8 个回答的 Advantage 分别是多少？这批数据会对策略模型产生怎样的梯度更新？这说明了 SFT 阶段的什么重要性？</strong>
+<em>Hint：全部错误意味着 Reward 全局一致。Advantage 公式中的分子会变成什么？</em></p>
+</li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>如果 8 个采样的答案和格式全部错误，它们的原始 Reward 将完全相同（例如全部是 -1.0）。
+根据公式，这组数据的均值 $\mu_R = -1.0$，标准差 $\sigma_R = 0$。
+计算优势值时，分子 $R_{j,i} - \mu_{R_j} = -1.0 - (-1.0) = 0$。因此，所有 8 个回答的 Advantage 都将等于 0。
+由于 Advantage 为 0，策略梯度项 $A \cdot \log \pi_\theta$ 为 0，这意味着这批数据不会对策略模型产生任何与 Reward 相关的梯度更新（仅剩下微弱的 KL 惩罚试图维持原状）。
+这深刻说明了 SFT 阶段的至关重要性：RL 依赖于“在探索中偶然做对”来获得正向信号。SFT 必须赋予模型基础的解题能力和严格的格式遵循能力，使其在 K 次采样中至少有一定概率（例如 5%）能碰对答案或写对格式。如果 SFT 基础太差，RL 就无法获得差异化的奖励信号，无法完成“自举”（Bootstrapping），训练将直接宣告失败。</p>
+</details>
+<h2 id="95-gotchas">9.5 常见陷阱与错误 (Gotchas)</h2>
+<ol>
+<li>
+<p><strong>批量采样导致的 OOM（显存溢出）</strong>
+   - <strong>现象</strong>：前一个阶段的 SFT 跑得非常顺畅，显存占用稳定。但一启动 <code>scripts/chat_rl.py</code>，刚进入第一个 Epoch 的采样阶段（Sampling/Rollout），程序就直接崩溃并报 CUDA Out of Memory。
+   - <strong>原因</strong>：RL 阶段在生成时，对于每一个 Prompt 需要并行生成 $K$ 个解答。这意味着在推理引擎内部，实际的 Batch Size 被放大了 $K$ 倍。同时，显存中还需要驻留庞大的 KV Cache 以及参考模型的权重。
+   - <strong>调试技巧</strong>：</p>
+<ol>
+<li>立即减小配置文件中的每卡微批次大小（<code>--device-batch-size</code>），例如从 4 降到 1。</li>
+<li>适当减小 $K$ 值，但根据 Rule-of-Thumb，尽量不要低于 4，否则训练极不稳定。</li>
+<li>检查是否开启了 Flash Attention。</li>
+<li>如果框架支持，在生成阶段释放不必要的梯度缓存，或者将参考模型卸载到 CPU。</li>
+</ol>
+</li>
+<li>
+<p><strong>Reward 极度稀疏与冷启动失败</strong>
+   - <strong>现象</strong>：训练已经跑了几百步，监控面板（如 WandB 或 Report）上的平均 Reward 一直在负数徘徊，准确率指标毫无提升，KL 散度也非常低。
+   - <strong>原因</strong>：这是典型的冷启动失败。SFT 阶段的数据质量不够，或者 SFT 训练不充分，导致模型根本不知道怎么按照规则引擎要求的格式输出标签（如 <code>&lt;answer&gt;</code>）。结果就是，所有采样的 Reward 都是一样的负数，Advantage 全是 0，模型得不到任何有效的优化方向。
+   - <strong>调试技巧</strong>：退回第 8 章，仔细检查 SFT 数据集。确保 SFT 数据集中包含了足够多与 RL 阶段格式<strong>完全一致</strong>的数学推理数据。你可以写一个简单的脚本，用当前的 SFT 模型对 RL 训练集进行贪婪解码（Greedy Decoding），如果准确率低于 5%，不要开始 RL 训练，先去优化 SFT。</p>
+</li>
+<li>
+<p><strong>KL 散度爆炸与模型崩溃</strong>
+   - <strong>现象</strong>：训练初期 Reward 似乎有上升的趋势，但很快生成的文本变成了毫无意义的乱码或重复的标点符号。同时，监控面板上的 KL 散度迅速飙升到几十甚至上百。
+   - <strong>原因</strong>：KL 惩罚系数 $\beta$ 设置得太小，或者优化器的学习率（Learning Rate）设置得过大。策略模型发现通过输出乱码可以走捷径获得 Reward，由于缺乏足够的 KL 约束，模型迅速破坏了自身的语言结构，偏离了参考模型。
+   - <strong>调试技巧</strong>：</p>
+<ol>
+<li>立即停止训练。</li>
+<li>将 $\beta$ 值调大（例如从 $0.001$ 调大到 $0.02$ 或 $0.05$）。</li>
+<li>降低 RL 阶段的学习率（RL 的学习率通常比 SFT 还要小一个数量级，例如 $1e-6$ 或 $5e-7$）。</li>
+<li>监控 <code>report</code> 中的 <code>kl_div</code> 指标，通常希望它保持在一个稳定的小正数区间（例如 $0.5$ 到 $2.0$ 之间）。</li>
+</ol>
+</li>
+<li>
+<p><strong>优势归一化的除零风险与 NaN 梯度</strong>
+   - <strong>现象</strong>：训练过程中，Loss 突然变成 <code>NaN</code>，随后模型权重全部损坏，程序报错退出。
+   - <strong>原因</strong>：当某一组采样的 Reward 完全一致时（方差为 0），如果在计算 Advantage 的公式中忘记加上平滑项 $\epsilon$，或者 $\epsilon$ 设置得太小（例如 $1e-12$），在结合半精度（FP16/BF16）进行计算时极易发生数值下溢，导致除以零产生 <code>NaN</code>。这个 <code>NaN</code> 会随着反向传播污染所有的梯度和权重。
+   - <strong>调试技巧</strong>：</p>
+<ol>
+<li>检查代码中计算 Advantage 的部分，确保分母是 <code>std + 1e-4</code> 或类似的合理常数。</li>
+<li>在代码实现中，计算均值、标准差和 Advantage 的过程，<strong>强烈建议强制转换到 FP32 精度下进行</strong>，计算完毕后再转回半精度参与后续的 Loss 计算。优先使用 BF16 而不是 FP16 来训练 RL 阶段，因为 BF16 具有更大的动态范围。</li>
+</ol>
+</li>
+<li>
+<p><strong>格式崩溃（Format Collapse）</strong>
+   - <strong>现象</strong>：模型算对了数学题，但是输出的格式越来越奇怪，例如把 <code>&lt;answer&gt; 42 &lt;/answer&gt;</code> 写成了 <code>&lt;answer&gt;42&lt;/answer&gt;42&lt;answer&gt;</code>，导致规则引擎无法正确提取，Reward 突然断崖式下跌。
+   - <strong>原因</strong>：规则引擎的正则表达式写得不够严谨，或者 Reward 塑形（Reward Shaping）存在漏洞。模型发现某种奇怪的格式碰巧能触发规则引擎的“正确”判定，于是疯狂放大这种格式。
+   - <strong>调试技巧</strong>：</p>
+<ol>
+<li>导出模型生成的原始文本（Raw Responses），人工检查那些被规则引擎判定为“正确”但格式诡异的样本。</li>
+<li>收紧提取答案的正则表达式。</li>
+<li>在 Reward 函数中增加“严格格式匹配”的额外奖励，或者对冗余的标签输出施加惩罚。确保 Reward 函数的逻辑无懈可击，不给模型留下任何作弊的漏洞。</li>
+</ol>
+</li>
+</ol>
+            </article>
+            
+            <nav class="page-nav"><a href="chapter8.html" class="nav-link prev">← 第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</a><a href="chapter10.html" class="nav-link next">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

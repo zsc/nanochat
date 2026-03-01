@@ -117,10 +117,7 @@ $$K = \lceil \frac{N}{M} \rceil$$
 
 例如，在你的登录节点上，`~/.cache` 通常位于容量极小且 I/O 极慢的网络挂载盘（NFS）上。如果你直接在这里解压数百 GB 的 Parquet 文件，不仅会耗尽配额，还会拖垮整个集群的文件系统。正确的做法是在启动脚本中将其指向本地的高速 NVMe 固态硬盘或并行文件系统（如 Lustre 或 GPFS）：
 
-```bash
-# 在 runs/speedrun.sh 或你的终端中设置
-export NANOCHAT_BASE_DIR=/mnt/nvme_storage/my_username/nanochat_cache
-```
+例如：在 `runs/speedrun.sh` 或你的终端中设置环境变量，形如 `export NANOCHAT_BASE_DIR=/mnt/nvme_storage/my_username/nanochat_cache`。
 
 ### 3.3.2 避免符号链接（Symlink）地狱
 

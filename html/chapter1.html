@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 1 章：nanochat 是什么，以及它的“最小全流程”</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="1-nanochat">第 1 章：nanochat 是什么，以及它的“最小全流程”</h1>
+<p>欢迎来到 nanochat 的世界。本章将为你建立关于 nanochat 的整体心智模型。无论你是负责清洗数据的工程师，还是负责压榨 GPU 算力的训练专家，在深入细节之前，都需要清楚地知道：我们在训练什么、数据从哪里来、产物落到哪里，以及如何客观地评估这套系统。本章的学习目标是掌握 nanochat 的端到端流水线，并理解其作为“最小可读全流程”的设计哲学。</p>
+<p>在真实的工业界场景中，大语言模型（LLM）的训练往往被切分为多个孤立的团队：数据团队负责洗语料并构建数据飞轮，预训练团队负责在千卡集群上维持高 MFU（模型算力利用率）并跑降 Loss，对齐团队负责做 SFT（监督微调）和 RL（强化学习）以讨好人类偏好或提升逻辑推理，而评测团队则负责构建复杂的打榜系统。这种高度专业化的分工虽然在工程上极其高效，但也容易让人“只见树木，不见森林”。算法工程师往往只熟悉自己负责的几个 Python 文件，而对上下游的数据流转和物理意义缺乏直觉。</p>
+<p>nanochat 的诞生正是为了打破这种壁垒。它提供了一个全局视角，让你在一台机器上就能完整体验数据流转、权重更新与能力涌现的全过程。</p>
+<h2 id="11-nanochat">1.1 什么是 nanochat？</h2>
+<p>nanochat 并非一个用于在万卡集群上训练万亿参数模型（如 GPT-4 或 Llama-3-70B）的重型分布式框架（如 Megatron-LM 或 DeepSpeed）。相反，它是一个面向“单机单节点”（或少量节点）、侧重于教育、实验与快速迭代的轻量级工程库。</p>
+<p>它的核心目标是将大语言模型从零开始到能够流畅对话的整条链路，压缩到最小可读、最小可改的程度。在 nanochat 中，你不会看到为了支持 3D 并行（张量并行、流水线并行、数据并行）而写出的成百上千行复杂的通信钩子代码；取而代之的是最纯粹的 PyTorch 原生 DDP（分布式数据并行）以及高度优化的单卡算子（如 FlashAttention）。</p>
+<p><strong>nanochat 的核心定位：</strong></p>
+<ul>
+<li><strong>白盒化</strong>：从数据的字节流到最终的对话 UI，每一步的中间产物都是可检查、可解释的。</li>
+<li><strong>单节点友好</strong>：默认配置针对单机 8 卡（如 8x A100/H100）或单机 4 卡环境进行了极致的显存和吞吐优化，避免了跨节点网络通信的复杂性。</li>
+<li><strong>端到端收敛</strong>：它不仅仅是一个“能跑通”的代码库，更是一个“能收敛”的配方库。它内置了能够复现特定规模下最优性能的超参数配置。</li>
+</ul>
+<p>如果你想研究如何修改 Transformer 的注意力机制，或者想测试一种新的数据混合比例，nanochat 是你最好的试炼场。</p>
+<h2 id="12">1.2 最小全流程解析</h2>
+<p>nanochat 的生命周期可以通过一条明确的流水线来描述。这条流水线的“事实标准”记录在项目的端到端脚本（如 <code>runs/speedrun.sh</code>）中。它定义了从无到有的六个关键阶段。为了让你建立物理直觉，我们用一张详细的 ASCII 图来展示数据和张量在各个阶段的流转与形态变化：</p>
+<div class="codehilite"><pre><span></span><code>[阶段 1: 数据与分词]
+原始网页文本 (FineWeb-Edu)
+      | (UTF-8 字节流)
+      v
++-----------------------+     训练     +-----------------------+
+| Tokenizer 训练器      | -----------&gt; | 词表与合并规则 (BPE)  |
+| (统计高频字节对)      |              | (Vocab Size: ~65536)  |
++-----------------------+              +-----------------------+
+      | (应用分词)
+      v
+预训练语料 Shards (Parquet)
+(每行是一个整数数组: [1024, 56, 899, ...])
+
+=========================================================================
+
+[阶段 2: Base 预训练]
+Parquet Shards
+      | (Dataloader 拼接与切分)
+      v
+Batch Tensor: 形状 (B, T)  --- B: 批大小, T: 上下文长度 (如 2048)
+      |
+      v
++-----------------------+      Loss    +-----------------------+
+| GPT 架构前向传播      | -----------&gt; | 交叉熵损失计算        |
+| (Embedding -&gt; Blocks) |              | (Next-Token 预测)     |
++-----------------------+              +-----------------------+
+      | (反向传播与优化器更新)
+      v
+Base Checkpoint (仅具备续写能力，无对话礼仪)
+
+=========================================================================
+
+[阶段 3: 对齐 (SFT &amp; RL)]
+对话数据集 (JSONL: 包含 System/User/Assistant)
+      | (应用 Chat 模板与 Masking)
+      v
+Batch Tensor: (B, T) + Loss Mask: (B, T) --- 仅在 Assistant 处为 1，其余为 0
+      |
+      v
++-----------------------+              +-----------------------+
+| SFT 微调              | -----------&gt; | RL 强化学习 (可选)    |
+| (克隆人类对话行为)    |              | (GSM8K 采样与奖励)    |
++-----------------------+              +-----------------------+
+      |
+      v
+Chat/RL Checkpoint (具备对话能力与特定任务推理能力)
+
+=========================================================================
+
+[阶段 4: 评估与推理]
+Chat/RL Checkpoint
+      |
+      +---&gt; [离线评估] ---&gt; BPB (底层分布拟合度), CORE (任务准确率)
+      |
+      +---&gt; [在线交互] ---&gt; KV Cache 状态机 ---&gt; Web UI / CLI
+</code></pre></div>
+
+<h3 id="tokenizer">阶段一：数据与 Tokenizer</h3>
+<p>一切始于文本。系统首先需要获取高质量的预训练语料（nanochat 默认使用 FineWeb-Edu 等高质量学术/教育语料），并将其切分为便于流式读取的 Parquet 分片（Shards）。</p>
+<p>接着，系统会在这些语料的一个子集上训练 Tokenizer。nanochat 采用类似于 GPT-4 的字节对编码（Byte-Pair Encoding, BPE）算法。BPE 的本质是一种数据压缩算法。它初始化时将所有文本视为单字节序列（256 个基础 Token），然后迭代地寻找语料中相邻频率最高的两个 Token，将它们合并为一个新的 Token，直到达到预设的词表大小（Vocabulary Size，通常为 32000 到 100000 之间）。</p>
+<p><strong>数学直觉：压缩率</strong>
+Tokenizer 的好坏直接决定了模型的“阅读速度”。假设一段文本的 UTF-8 字节数为 $N_{\text{bytes}}$，经过 Tokenizer 编码后的 Token 数量为 $N_{\text{tokens}}$，那么该 Tokenizer 在这段文本上的压缩率为：
+$$ C = \frac{N_{\text{bytes}}}{N_{\text{tokens}}} $$
+对于现代中文/英文混合语料，优秀的 BPE Tokenizer 的压缩率 $C$ 通常在 $3.5$ 到 $4.5$ 之间。这意味着模型每处理一个 Token，实际上“消化”了大约 4 个字节的信息。词表越大，压缩率通常越高，但 Embedding 层的参数量也会随之线性增长，容易导致长尾 Token 训练不充分。</p>
+<p>在这个阶段，还会定义一些极其重要的特殊 Token（Special Tokens），例如表示文档结束的 <code>&lt;|endoftext|&gt;</code>，以及用于对话格式控制的 <code>&lt;|im_start|&gt;</code> 和 <code>&lt;|im_end|&gt;</code>。</p>
+<h3 id="base">阶段二：Base 预训练</h3>
+<p>这是整个流水线中计算量最大、耗时最长的阶段。模型（典型的因果 Transformer 架构，包含旋转位置编码 RoPE、SwiGLU 激活函数和 RMSNorm）在此阶段通过“预测下一个 Token”（Next-Token Prediction）的任务，贪婪地吸收世界知识。</p>
+<p><strong>数学直觉：自回归交叉熵损失</strong>
+在预训练阶段，假设输入序列为 $x = (x_1, x_2, \dots, x_T)$。模型的目标是最大化该序列的联合概率。根据链式法则，这等价于最大化每个位置上“给定历史上下文预测当前 Token”的条件概率之积。在对数空间中，这转化为最小化交叉熵损失（Cross-Entropy Loss）：
+$$ \mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P(x_t \mid x_{&lt;t}; \theta) $$
+其中 $\theta$ 是模型的参数，$x_{&lt;t}$ 表示位置 $t$ 之前的所有 Token。为了防止模型“偷看”未来的信息，Transformer 内部使用了因果掩码（Causal Mask），这是一个下三角矩阵，将注意力矩阵右上角的值设为负无穷大（$-\infty$），使得 Softmax 后的权重为 0。</p>
+<p>在这个阶段，数据加载器（Dataloader）会无情地将不同文档拼接在一起（用 <code>&lt;|endoftext|&gt;</code> 隔开），然后切分成固定长度 $T$（如 2048 或 4096）的片段喂给模型。这种做法被称为 Packing，它能保证 GPU 的计算矩阵始终是饱满的，从而最大化硬件利用率（MFU）。</p>
+<h3 id="sft-rl">阶段三：对齐（SFT 与 RL）</h3>
+<p>经过 Base 预训练的模型就像一个博览群书但缺乏社交常识的学者。如果你对它输入“中国的首都是哪里？”，它大概率不会回答“北京”，而是会续写“美国的首都是哪里？英国的首都是哪里？”（因为它在预训练语料中见过很多这样的排比句）。</p>
+<p>为了让它变成一个有用的问答助手，我们需要进行监督微调（Supervised Fine-Tuning, SFT）。在这个阶段，数据准备人员需要精心构造对话格式（通常称为 ChatML 格式）。</p>
+<p><strong>格式与 Mask 机制示例：</strong>
+一段典型的 SFT 数据在送入模型前，会被拼接成如下形式（以文本表示）：
+<code>[BOS]&lt;|im_start|&gt;user\n中国的首都是哪里？&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n中国的首都是北京。&lt;|im_end|&gt;[EOS]</code></p>
+<p>在计算损失时，我们引入了一个与输入序列等长的 Mask 向量（通常用 PyTorch 中的 <code>ignore_index = -100</code> 来表示不计算损失的位置）。</p>
+<ul>
+<li><code>[BOS]&lt;|im_start|&gt;user\n中国的首都是哪里？&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n</code> 这一部分的 Mask 值为 0（或 -100）。</li>
+<li><code>中国的首都是北京。&lt;|im_end|&gt;[EOS]</code> 这一部分的 Mask 值为 1。</li>
+</ul>
+<p>这样，损失函数变为：
+$$ \mathcal{L}_{\text{SFT}} = -\frac{1}{\sum_{t} m_t} \sum_{t=1}^{T} m_t \log P(x_t \mid x_{&lt;t}; \theta) $$
+其中 $m_t \in \{0, 1\}$ 是位置 $t$ 的 Mask 值。这强制模型只学习如何“回答”问题，而不去学习如何“模仿”用户的提问或系统提示词。</p>
+<p><strong>强化学习（RL）的引入：</strong>
+SFT 本质上是行为克隆（Behavior Cloning），它可能导致模型产生幻觉（因为模型可能并没有真正掌握推导过程，只是在模仿人类的语气）。nanochat 提供了一个轻量级的 RL 阶段（类似于 GRPO 或 REINFORCE 算法）。在特定任务（如 GSM8K 数学题）上，模型会针对同一个问题生成多个不同的解答路径（采样），环境（或规则验证器）会根据最终答案的正确性给予奖励（Reward）。模型通过最大化期望奖励来优化参数，从而在巨大的搜索空间中找到更稳健的推理路径。</p>
+<h3 id="_1">阶段四：评估与交互</h3>
+<p>训练的每一个关键节点都必须伴随严格的评估。没有评估的训练就像是在黑夜中蒙眼狂奔。</p>
+<p><strong>底层指标：BPB (Bits Per Byte)</strong>
+在比较不同模型时，直接比较 Loss 是毫无意义的，因为不同的 Tokenizer 具有不同的词表大小和压缩率。一个词表极大的 Tokenizer 可能会得到很低的 Loss，但这只是因为它把长句子切成了很少的 Token，并不代表它真正理解了文本。
+为了进行跨 Tokenizer 的公平比较，nanochat 引入了 BPB。它的物理意义是：模型平均需要多少个比特（Bits）的信息量来预测文本中的一个字节（Byte）。
+$$ \text{BPB} = \frac{\mathcal{L}}{\ln(2) \cdot C} $$
+其中 $\mathcal{L}$ 是自然对数底下的交叉熵损失（Nats per Token），$C$ 是上文提到的 Tokenizer 压缩率（Bytes per Token）。除以 $\ln(2)$ 是为了将底数从 $e$ 转换为 $2$（即转换为比特）。BPB 越低，说明模型对真实语言分布的压缩和拟合能力越强。</p>
+<p><strong>上层指标与推理：</strong>
+除了 BPB，nanochat 使用 CORE 和 ChatCORE 评测套件来衡量模型在多项选择题和指令遵循任务上的准确率。
+最终，训练好的权重会被加载到推理引擎中。在推理时，为了避免重复计算历史 Token 的注意力，引擎会维护一个 KV Cache（键值缓存）。KV Cache 的显存占用与批大小 $B$、序列长度 $T$、模型层数 $L$ 和注意力头数成正比。理解 KV Cache 的状态机流转，是实现高效 Chat UI 和流式输出（Streaming）的关键。</p>
+<h2 id="13-rules-of-thumb">1.3 核心设计哲学与经验法则 (Rules of Thumb)</h2>
+<p>在深入修改 nanochat 的代码之前，请务必将以下几条经验法则刻在脑子里。它们是无数次 OOM（显存溢出）和 Loss 爆炸换来的血泪教训。</p>
+<p><strong>法则 1：端到端基线神圣不可侵犯</strong>
+以 <code>runs/speedrun.sh</code> 作为“端到端正确性”的绝对基线。任何局部优化（无论是修改了 Dataloader 的预取逻辑，还是替换了激活函数），在合并之前，都必须回到这条链路上跑一遍。如果你的改动让单步吞吐提升了 10%，但导致最终的 BPB 上升了 0.1，或者 ChatCORE 得分下降，那么这个改动就是失败的。永远盯着最终产物。</p>
+<p><strong>法则 2：先缩放深度，再缩放宽度，最后缩放数据</strong>
+当你在调试一个新的架构想法或数据混合比例时，不要一上来就跑 24 层（<code>d24</code>）的标准模型。先用极小深度（例如 4 层或 12 层，<code>d4</code> / <code>d12</code>）把数据流、Tokenizer、评估脚本跑顺。小模型虽然能力弱，但它的 Loss 曲线形态和 OOM 边界能为你提供足够的信息。确认无误后，再上 <code>d24/d26</code> 追逐能力与速度。</p>
+<p><strong>法则 3：OOM 排障的三板斧</strong>
+当遇到 <code>CUDA Out of Memory</code> 时，按照以下顺序调整超参数：</p>
+<ol>
+<li>优先降低 <strong>每卡微批次大小</strong>（<code>--device-batch-size</code> 或 <code>micro_batch_size</code>）。这是最直接减少激活值显存占用的方法。</li>
+<li>如果微批次已经降到 1 仍然 OOM，考虑开启梯度检查点（Gradient Checkpointing），这会牺牲约 20% 的计算速度来换取显著的显存节省。</li>
+<li>只有在上述方法都失效时，才去动 <strong>总批次大小</strong>（<code>--total-batch-size</code>）或 <strong>序列长度</strong>（<code>seq_len</code>）。因为改变总批次大小会改变优化的数学等价性（影响收敛轨迹），而改变序列长度会破坏长文本建模能力。</li>
+</ol>
+<p><strong>法则 4：数据准备的第一性原理</strong>
+训练细节再漂亮，也会被数据噪声淹没（Garbage in, garbage out）。数据准备必须遵循三个不可妥协的原则：</p>
+<ul>
+<li><strong>格式绝对一致</strong>：SFT 阶段的 ChatML 拼接逻辑必须与推理引擎中的 Prompt 渲染逻辑在字节级别完全一致。多一个空格或少一个换行，都可能导致模型性能断崖式下跌。</li>
+<li><strong>可复现的 Shuffle</strong>：数据集的打乱必须依赖固定的全局随机种子（Seed）。否则，当你中断并恢复训练时，模型可能会重复看到相同的数据，导致过拟合。</li>
+<li><strong>可解释的 Packing 与 Mask</strong>：确保你知道每一个 Batch 中有多少比例的 Token 是被 Mask 掉的（即不参与 Loss 计算）。如果 Mask 比例过高，说明你的数据利用率极低。</li>
+</ul>
+<p><strong>法则 5：敬畏缓存与 I/O</strong>
+nanochat 默认将所有产物（下载的原始数据、切分后的 Parquet、编译后的词表、训练过程中的 Checkpoint）落盘到统一的缓存目录（默认 <code>~/.cache/nanochat</code>，可通过环境变量 <code>NANOCHAT_BASE_DIR</code> 覆盖）。在进行 Scaling 实验时，极易发生磁盘空间耗尽或 I/O 瓶颈。养成定期清理旧 Checkpoint 和监控磁盘使用率的习惯。</p>
+<h2 id="_2">本章小结</h2>
+<ul>
+<li><strong>定位</strong>：nanochat 是一个聚焦于“单机可复现”、面向实验与教育的端到端 LLM 训练流水线。它拒绝过度封装，追求白盒化。</li>
+<li><strong>全流程</strong>：完整的生命周期包含：语料准备与分词 $\rightarrow$ Base 预训练（Next-Token 预测） $\rightarrow$ SFT（对话格式对齐） $\rightarrow$ RL（强化学习与推理提升） $\rightarrow$ 评估与推理（KV Cache 交互）。</li>
+<li><strong>关键机制</strong>：理解 BPE 的压缩率、预训练的因果交叉熵损失、SFT 的 Mask 机制，是掌握模型行为的基础。</li>
+<li><strong>评估体系</strong>：使用 BPB 进行跨 Tokenizer 的底层能力公平比较，使用 CORE/ChatCORE 进行上层任务评估。</li>
+<li><strong>工程纪律</strong>：时刻遵循端到端验证、从小规模开始调试、严格控制数据格式一致性以及管理好本地缓存。</li>
+</ul>
+<h2 id="_3">练习题</h2>
+<ol>
+<li><strong>（基础题）在 nanochat 的全流程中，Base 预训练阶段的主要优化目标是什么？它的损失函数在数学上是如何表达的？</strong>
+- Hint：思考模型在这个阶段接收到的数据形式，以及它如何利用历史信息预测未来。回忆交叉熵的公式。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>Base 预训练阶段的主要优化目标是自回归语言建模（Next-Token Prediction）。它旨在让模型学习语言的统计规律和世界知识，而不涉及对话礼仪。
+其数学表达为最小化序列的交叉熵损失：
+$$ \mathcal{L} = -\frac{1}{T} \sum_{t=1}^{T} \log P(x_t \mid x_{&lt;t}; \theta) $$
+其中 $T$ 是序列长度，$x_t$ 是当前位置的真实 Token，$x_{&lt;t}$ 是历史上下文，$\theta$ 是模型参数。
+</details></p>
+<ol start="2">
+<li><strong>（基础题）Tokenizer 训练阶段输出的“词表大小”（Vocabulary Size）对后续训练有什么直接的物理和工程影响？</strong>
+- Hint：联系模型架构中的 Embedding 层和最后的输出分类层（LM Head），以及 BPE 的压缩率概念。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<ol>
+<li><strong>参数量影响</strong>：词表大小直接决定了模型的 Embedding 层（形状为 <code>[Vocab_Size, Hidden_Dim]</code>）和最后的 LM Head 层（形状同上）的参数量。词表越大，模型体积越大，显存占用越高。</li>
+<li><strong>压缩率与计算效率</strong>：较大的词表通常意味着更高的文本压缩率（一个 Token 能表示更长的子串），从而在相同的上下文窗口（如 2048 Tokens）内塞入更多的实际文本信息，提升推理时的信息吞吐量。</li>
+<li><strong>长尾问题</strong>：词表过大可能导致某些罕见 Token 在训练语料中出现次数极少，其对应的 Embedding 向量无法得到充分更新（训练不充分）。</li>
+</ol>
+</details>
+<ol start="3">
+<li><strong>（基础题）在 SFT（监督微调）阶段，为什么必须引入 Mask 机制（如设置 <code>ignore_index = -100</code>）？</strong>
+- Hint：在一段包含“系统提示”、“用户提问”和“助手回答”的完整对话序列中，模型应该对哪部分的生成负责？如果不对用户提问进行 Mask 会发生什么？</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>Mask 机制用于在计算损失时屏蔽掉“系统提示词”和“用户提问”部分的 Token，使得模型只对“助手回答”部分的生成计算梯度并更新权重。
+如果不进行 Mask，模型会将“预测用户的提问”也作为优化目标。这不仅浪费了计算资源，更严重的是，它会破坏模型的角色定位，导致模型在推理时可能会自言自语，顺着用户的口吻继续生成假问题，而不是停下来回答问题。</p>
+</details>
+<ol start="4">
+<li><strong>（基础题）nanochat 中用于衡量模型底层语言建模能力的核心指标 BPB（Bits Per Byte）是如何计算的？为什么不能直接比较两个不同 Tokenizer 模型的 Loss？</strong>
+- Hint：回忆信息论中比特的定义，以及 Tokenizer 压缩率 $C$ 的物理意义。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>BPB 的计算公式为：
+$$ \text{BPB} = \frac{\mathcal{L}}{\ln(2) \cdot C} $$
+其中 $\mathcal{L}$ 是自然对数下的交叉熵 Loss，$C$ 是 Tokenizer 的压缩率（Bytes per Token）。
+不能直接比较 Loss，是因为 Loss 是基于 Token 级别计算的。一个词表极大的 Tokenizer（比如把一整句话作为一个 Token）会得到很低的 Loss（因为序列变短了，预测步骤少了），但这不代表模型更聪明，只是度量标尺变了。BPB 将度量标尺统一到了底层的“字节”级别，从而实现了跨 Tokenizer 的绝对公平比较。</p>
+</details>
+<ol start="5">
+<li><strong>（挑战题）如果在端到端流水线中，Base 预训练的 BPB 持续稳定下降，但进入 SFT 阶段后，ChatCORE 评测得分极低，且模型在交互时总是输出乱码或重复标点。可能的问题出在哪里？请列举至少三种排查方向。</strong>
+- Hint：区分“知识容量”与“格式对齐”。Base 阶段正常说明模型权重没坏，问题大概率出在 SFT 的数据流或超参上。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>可能的问题排查方向：</p>
+<ol>
+<li><strong>ChatML 格式不一致</strong>：SFT 训练时拼接的特殊 Token（如 <code>&lt;|im_start|&gt;</code>、换行符）与评测/推理时构建 Prompt 的逻辑不一致。模型看到了它在 SFT 阶段从未见过的序列模式。</li>
+<li><strong>Mask 逻辑写反或错位</strong>：不小心把“助手回答”给 Mask 掉了，反而让模型去学习“用户提问”，导致模型根本没有学到如何输出答案；或者 Mask 数组与 Token 数组发生了 $+1$ 或 $-1$ 的错位。</li>
+<li><strong>学习率过大导致灾难性遗忘</strong>：SFT 阶段的学习率通常应该比预训练阶段小 1 到 2 个数量级。如果学习率过大，会破坏 Base 模型已经学好的底层语言表示，导致模型崩溃（输出乱码）。</li>
+<li><strong>SFT 数据质量极差或未洗牌</strong>：数据中包含大量无意义的重复字符，或者数据未 Shuffle 导致模型在一个 Batch 内只看到同一种极其特殊的对话模式而严重过拟合。</li>
+</ol>
+</details>
+<ol start="6">
+<li><strong>（挑战题）在 Base 预训练中，Dataloader 会使用 Packing 技术将多个短文档拼接成长度为 $T$ 的序列。如果两个不相关的文档被拼接在一起，前一个文档的末尾会影响后一个文档开头的预测吗？nanochat 是如何处理这个问题的？</strong>
+- Hint：思考注意力机制的感受野，以及特殊 Token <code>&lt;|endoftext|&gt;</code> 的作用。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>在标准的因果注意力机制中，后一个文档的开头确实会“看到”前一个文档的末尾，这在理论上引入了跨文档的噪声（因为它们在语义上是不相关的）。
+nanochat（以及大多数开源模型）的处理方式是：在两个文档之间强制插入一个特殊的文档结束符 <code>&lt;|endoftext|&gt;</code>。虽然注意力机制在物理上仍然跨越了文档边界，但模型在训练过程中会学习到：一旦遇到 <code>&lt;|endoftext|&gt;</code>，就应该“重置”其内部状态，忽略之前的上下文。
+（注：更高级的做法是使用 Document Masking 或 Block Diagonal Attention，在注意力矩阵中物理隔绝不同文档，但为了保持算子的高效和实现的简洁，nanochat 默认采用插入特殊符并依赖模型自身学习重置能力的方案。）</p>
+</details>
+<ol start="7">
+<li><strong>（挑战题）为什么在进行 RL（强化学习）之前，通常必须先经过 SFT 阶段？如果直接在 Base 模型上运行 RL 会发生什么？</strong>
+- Hint：思考 RL 算法（如基于采样的强化学习）在巨大搜索空间中的冷启动问题，以及“奖励信号”的稀疏性。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>Base 模型生成的文本是高度发散的，缺乏对话格式和任务聚焦。如果直接在 Base 模型上跑 RL，模型在初始的随机采样中，几乎不可能生成符合要求（如特定格式的数学解答、带有 <code>####</code> 答案标记的输出）的轨迹。
+这就导致环境返回的奖励（Reward）几乎永远是 0。在极其稀疏甚至全零的奖励信号下，RL 算法无法获得有效的梯度方向，导致训练无法收敛（冷启动失败）。
+SFT 提供了一个良好的初始化策略（Behavior Cloning），将模型强制约束到正确的输出格式和行为空间中。这样，RL 阶段的初始采样就能以较高的概率生成有效格式，从而获得非零的奖励信号，进而在此基础上进行细粒度的探索和策略优化。</p>
+</details>
+<ol start="8">
+<li><strong>（挑战题）nanochat 强调所有产物默认落盘到统一的缓存目录 <code>NANOCHAT_BASE_DIR</code>。在进行大规模 Scaling 实验（如同时运行多个不同超参的实验）时，这种设计会带来哪些潜在的工程灾难？如何避免？</strong>
+- Hint：考虑存储介质的物理限制、操作系统的文件锁机制以及并发读写。</li>
+</ol>
+<details>
+<summary>查看答案</summary>
+<p>潜在的工程灾难包括：</p>
+<ol>
+<li><strong>磁盘空间耗尽（Disk Full）</strong>：大量的 Checkpoint（每个可能几十 GB）和处理后的数据集分片会迅速占满硬盘，导致所有正在运行的实验因 <code>No space left on device</code> 而同时崩溃。</li>
+<li><strong>并发写入冲突与数据损坏</strong>：如果多个实验进程同时尝试下载并处理同一个数据集到同一个缓存路径，且没有实现严格的文件锁（File Lock）机制，会导致 Parquet 文件损坏或只写入一半。</li>
+<li><strong>缓存污染与失效判定错误</strong>：如果你修改了数据处理的逻辑（例如改变了 Mask 规则），但缓存系统仅根据文件名或旧的哈希值判定缓存命中，新实验就会错误地加载旧的脏数据，导致排障极其困难。
+<strong>避免方法</strong>：为不同的实验组设置独立的子缓存目录；实现基于内容哈希（Content Hash）的缓存键；在脚本中加入定期清理无用 Checkpoint 的钩子；在多进程下载时引入分布式锁。</li>
+</ol>
+</details>
+<h2 id="gotchas">常见陷阱与错误 (Gotchas)</h2>
+<p>在 nanochat 的日常使用中，你可能会遇到各种诡异的现象。以下是新手最容易踩坑的几个场景及其诊断方法：</p>
+<ul>
+<li><strong>陷阱 1：忽略缓存目录导致空间爆满，引发静默失败</strong></li>
+<li><strong>症状</strong>：训练脚本跑到一半突然停止，没有明显的 Python 报错堆栈，或者报错信息极为底层（如 <code>Bus error (core dumped)</code> 或 <code>RuntimeError: write failed</code>）。</li>
+<li><strong>诊断</strong>：nanochat 默认将数据集分片、Tokenizer 词表和 Checkpoint 存放在本地缓存（<code>~/.cache/nanochat</code>）中。极其可能是磁盘写满了。</li>
+<li>
+<p><strong>解决</strong>：运行 <code>df -h</code> 检查磁盘空间。通过设置环境变量 <code>export NANOCHAT_BASE_DIR=/path/to/large/disk</code> 将缓存重定向到大容量挂载盘。清理 <code>checkpoints/</code> 目录下不需要的历史权重。</p>
+</li>
+<li>
+<p><strong>陷阱 2：跳过基础评估，直接看对话 UI 导致误判</strong></p>
+</li>
+<li><strong>症状</strong>：跑完整个流水线后，直接打开 Chat UI，发现模型在“胡言乱语”或者不断重复同一个词。第一反应是去修改 SFT 的代码或学习率。</li>
+<li><strong>诊断</strong>：这是一种极其低效的排障路径。模型的对话能力建立在基础的语言建模能力之上。如果 Base 预训练根本没收敛，SFT 再怎么调也是徒劳。</li>
+<li>
+<p><strong>解决</strong>：永远遵循分层评估的原则。先看 Base 阶段的 BPB 是否在合理范围（例如是否降到了 1.0 以下）；再看 CORE 评测的准确率是否高于随机猜测。只有基础指标达标，UI 交互的异常才大概率是 SFT 格式问题。</p>
+</li>
+<li>
+<p><strong>陷阱 3：网络波动导致流水线在早期阶段中断</strong></p>
+</li>
+<li><strong>症状</strong>：脚本在启动时卡住几十分钟，然后抛出 <code>ConnectionTimeout</code> 或 <code>MaxRetryError</code>。</li>
+<li><strong>诊断</strong>：全流程依赖从远端（如 HuggingFace Hub 或 S3）拉取数据和评测集。如果你的执行环境（尤其是国内的计算节点）外网访问不稳定，下载阶段就会失败。</li>
+<li>
+<p><strong>解决</strong>：确保执行环境配置了正确的代理，或者在一台有稳定网络的机器上提前运行数据准备脚本，将生成的 <code>~/.cache/nanochat</code> 目录直接打包拷贝到训练节点的对应位置。</p>
+</li>
+<li>
+<p><strong>陷阱 4：微批次大小（Micro-Batch Size）与梯度累积（Gradient Accumulation）的数学误解</strong></p>
+</li>
+<li><strong>症状</strong>：为了解决 OOM，你将每卡批次大小从 8 降到了 2，然后发现模型收敛变慢了，Loss 曲线变得极其抖动。</li>
+<li><strong>诊断</strong>：你只降低了单次前向传播的样本数，但没有相应地增加梯度累积步数（Gradient Accumulation Steps）。这导致实际更新权重的“总批次大小”（Total Batch Size）变小了，梯度的方差变大，优化过程变得不稳定。</li>
+<li>
+<p><strong>解决</strong>：在 nanochat 中，始终关注“总批次大小”的恒定。总批次大小 = 每卡微批次大小 $\times$ 梯度累积步数 $\times$ GPU 数量。如果你将微批次大小除以 4，就必须将梯度累积步数乘以 4，以保证数学上的等价性。</p>
+</li>
+<li>
+<p><strong>陷阱 5：BOS (Begin of Sequence) Token 对齐错误</strong></p>
+</li>
+<li><strong>症状</strong>：SFT 训练 Loss 正常下降，但在推理时，模型总是生成一段空文本，或者第一句话极其不通顺。</li>
+<li><strong>诊断</strong>：在训练 Dataloader 中，序列的开头可能被强制插入了一个 <code>[BOS]</code> Token；但在推理引擎的 Prompt 渲染逻辑中，你忘记了手动添加这个 <code>[BOS]</code> Token。模型在推理时看到了一个从未在训练起始位置见过的分布。</li>
+<li><strong>解决</strong>：严格检查 <code>nanochat/dataloader.py</code> 和 <code>nanochat/engine.py</code>（或 <code>scripts/chat_cli.py</code>）中关于序列起始符的约定，确保训练和推理的 Token 序列在头部绝对一致。</li>
+</ul>
+</details>
+            </article>
+            
+            <nav class="page-nav"><a href="index.html" class="nav-link prev">← nanochat：面向模型训练与数据准备人员的中文手册</a><a href="chapter2.html" class="nav-link next">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="8-sft-maskidentity">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</h1>
+<p>预训练赋予了模型庞大的世界知识与基础的语言建模能力，但此时的模型仅仅是一个“无情的文本接龙机器”。如果你给预训练模型输入“如何烤蛋糕？”，它极大概率会续写“如何煮咖啡？”或者“——选自《家庭烘焙指南》”，而不是像一个 AI 助手那样给出步骤。要将这种无监督的续写能力转化为听懂指令、遵循对话规范、甚至能调用工具的交互能力，我们需要进行监督微调（Supervised Fine-Tuning, SFT）。</p>
+<p>本章将从数据工程与模型训练的交叉视角，深入拆解 SFT 阶段的核心任务。在 nanochat 的极简架构中，SFT 数据的准备并非简单的文本拼接，而是包含了一系列极其严苛的工程约定：如何把人类的对话意图翻译成模型能理解的 Token 序列，如何通过掩码（Mask）精确控制模型只在正确的地方产生梯度，以及如何像调配鸡尾酒一样混合不同能力维度的数据集。数据准备的第一性原理是：<strong>格式一致、可复现的打乱（Shuffle）、可解释的掩码与打包</strong>；否则，后续任何训练算法层面的优化，都会被数据的噪声彻底淹没。</p>
+<hr />
+<h2 id="81-token">8.1 对话格式与特殊 Token 约定：构建结构化边界</h2>
+<p>在预训练阶段，数据是一维的连续文本流，文档与文档之间通常只用一个特殊的结束符（如 <code>&lt;|endoftext|&gt;</code>）隔开。而在 SFT 阶段，数据是高度结构化的多轮对话。我们需要通过特定的“控制字符”（Special Tokens）在扁平的 Token 序列中划定出角色边界与结构边界。</p>
+<p>nanochat 采用了业界广泛验证的 ChatML（Chat Markup Language）风格。这种风格通过引入显式的角色标记，将系统指令（System）、用户输入（User）和模型回复（Assistant）清晰地隔离开来。</p>
+<h3 id="811-token">8.1.1 扁平 Token 流的视觉化解析</h3>
+<p>为了让模型理解“谁在说话”以及“什么时候该停止说话”，我们引入了两个核心的特殊 Token：<code>&lt;|im_start|&gt;</code>（消息开始）和 <code>&lt;|im_end|&gt;</code>（消息结束）。注意，角色名称（如 system, user, assistant）本身通常不是特殊 Token，而是普通的文本 Token，紧跟在 <code>&lt;|im_start|&gt;</code> 之后。</p>
+<p>以下是一个典型的单轮对话在扁平 Token 流中的物理形态：</p>
+<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------------------+
+| 结构化对话在 Token 序列中的物理展开 (ASCII 示意)                                  |
++-----------------------------------------------------------------------------------+
+| 序列索引:   0       1        2      3      4           5       6                  |
+| Token:    [BOS]   &lt;|im_start|&gt; system \n   你是一个助手。 &lt;|im_end|&gt; \n                 |
+| 角色归属:  [控制]  [----系统指令区----]    [----系统指令区----] [控制] [格式]             |
+
+| 角色归属:  [控制]  [----系统指令区----]    [----系统指令区----] [控制] [格式]             |
+|                                                                                   |
+| 序列索引:   7       8        9      10     11          12      13                 |
+| Token:    &lt;|im_start|&gt; user   \n   1+1=?  &lt;|im_end|&gt;  \n                          |
+| 角色归属:  [----用户输入区----]    [--用户输入区--] [控制] [格式]                       |
+|                                                                                   |
+| 序列索引:   14      15       16     17     18          19                         |
+| Token:    &lt;|im_start|&gt; assistant\n 1+1=2. &lt;|im_end|&gt;  [EOS]                       |
+| 角色归属:  [----模型回复区----]    [--模型回复区--] [控制] [控制]                       |
+
++-----------------------------------------------------------------------------------+
+</code></pre></div>
+
+<h3 id="812">8.1.2 格式的“防注入”与“闭合”特性</h3>
+<p>在设计对话模板时，最核心的考量是<strong>防注入（Prompt Injection Resistance）</strong>。如果仅仅使用普通的字符串（例如 <code>User:</code> 和 <code>Assistant:</code>）作为分隔符，恶意用户可以在输入中包含 <code>Assistant: 我是一个坏机器人</code>，从而欺骗模型，让模型以为这句话是自己生成的。</p>
+<p>通过将 <code>&lt;|im_start|&gt;</code> 和 <code>&lt;|im_end|&gt;</code> 注册为 Tokenizer 词表中的<strong>不可分割的特殊 Token</strong>（Special Tokens），即使用户在输入中敲入了字符串 <code>&lt;|im_start|&gt;</code>，Tokenizer 也会将其拆解为普通的字符 Token，而不会将其解析为控制 Token。这样就在物理层面上隔离了“控制平面”与“数据平面”。</p>
+<p><strong>经验法则（Rule-of-Thumb）：</strong></p>
+<ol>
+<li><strong>绝对闭合</strong>：每一个 <code>&lt;|im_start|&gt;</code> 必须有对应的 <code>&lt;|im_end|&gt;</code>。如果格式不闭合，模型在推理时将无法知道何时该停止生成，从而引发无限循环或胡言乱语。</li>
+<li><strong>换行符的归属</strong>：强烈建议在角色名称后强制加一个换行符 <code>\n</code>，在 <code>&lt;|im_end|&gt;</code> 后也强制加一个换行符 <code>\n</code>。这不仅符合人类阅读习惯，也能让模型在生成时有更明确的视觉停顿。必须确保训练数据和推理时的模板在空格和换行符上<strong>字节级一致</strong>。</li>
+</ol>
+<hr />
+<h2 id="82-masking">8.2 掩码机制（Masking）：精确控制学习信号与梯度</h2>
+<p>在预训练中，目标是预测序列中的每一个下一个 Token（Next-Token Prediction）。但在 SFT 中，我们<strong>不希望</strong>模型去学习如何“预测系统指令”或“预测用户的提问”。如果模型学会了预测用户提问，它在推理时可能会在回答完问题后，自导自演地继续生成下一个问题。</p>
+<p>因此，我们需要引入掩码（Mask）机制，精确控制损失函数（Loss）的计算范围，确保模型<strong>只在生成 Assistant 回复（包括结束符）时产生梯度</strong>。</p>
+<h3 id="821">8.2.1 错位预测与掩码对齐的数学逻辑</h3>
+<p>在自回归语言模型中，给定输入序列 $X = \{x_1, x_2, ..., x_T\}$，模型在位置 $i$ 的输出逻辑（Logits）用于预测位置 $i+1$ 的 Token $x_{i+1}$。</p>
+<p>我们构建一个与输入等长的布尔型掩码数组 $M = \{m_1, m_2, ..., m_T\}$，其中 $m_i \in \{0, 1\}$。</p>
+<ul>
+<li>当 $x_i$ 属于 System Prompt、User Prompt 或结构控制符（如 <code>&lt;|im_start|&gt; user</code>）时，$m_i = 0$。</li>
+<li>当 $x_i$ 属于 Assistant 的实际回复内容，以及标志回复结束的 <code>&lt;|im_end|&gt;</code> 时，$m_i = 1$。</li>
+</ul>
+<p>在计算交叉熵损失（Cross-Entropy Loss）时，我们需要对输入和目标进行<strong>错位（Shift）</strong>。假设我们取前 $T-1$ 个 Token 作为输入，后 $T-1$ 个 Token 作为预测目标。此时，掩码也必须同步错位。</p>
+<p>具体的带掩码的交叉熵损失公式如下：</p>
+<p>$$ L = - \frac{1}{\sum_{i=1}^{T-1} m_{i+1}} \sum_{i=1}^{T-1} m_{i+1} \log P(x_{i+1} | x_1, x_2, ..., x_i) $$
+公式解析：</p>
+<ol>
+<li>$P(x_{i+1} | x_1, ..., x_i)$ 是模型在看到前 $i$ 个 Token 后，预测第 $i+1$ 个 Token 的概率。</li>
+<li>$m_{i+1}$ 是第 $i+1$ 个 Token 的掩码。如果第 $i+1$ 个 Token 是用户输入，则 $m_{i+1} = 0$，该项对 Loss 的贡献为 0。</li>
+<li>分母 $\sum_{i=1}^{T-1} m_{i+1}$ 是当前序列中<strong>有效预测 Token 的总数</strong>。这一步极其重要，如果不除以有效 Token 数，而是除以总长度 $T$，会导致包含大量用户输入、回复极短的对话样本产生的 Loss 极小，从而被模型忽略。</li>
+</ol>
+<h3 id="822-ascii">8.2.2 掩码对齐的 ASCII 实例</h3>
+<p>这是 SFT 数据准备中最容易发生“差一错误（Off-by-one Error）”的地方。我们通过一个极简的例子来演示错位逻辑：</p>
+<p>假设原始 Token 序列为：<code>[BOS, User, Assis, End, EOS]</code>
+其中 <code>User</code> 代表用户提问，<code>Assis</code> 代表模型回复，<code>End</code> 代表 <code>&lt;|im_end|&gt;</code>。</p>
+<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------+
+| 掩码错位与 Loss 计算对齐表                                            |
++-----------------------------------------------------------------------+
+| 时间步 (i)    :   0        1        2        3         (4)            |
+| 原始序列 (X)  :  [BOS]    [User]   [Assis]  [End]     [EOS]           |
+| 原始掩码 (M)  :    0        0        1        1         0             |
+
+| 原始掩码 (M)  :    0        0        1        1         0             |
+|                                                                       |
+| 模型输入 (In) :  [BOS]    [User]   [Assis]  [End]     (丢弃最后一位)  |
+| 预测目标 (Tgt):  [User]   [Assis]  [End]    [EOS]     (丢弃第一位)    |
+| 目标掩码 (M&#39;) :    0        1        1        0       (同步目标错位)  |
+|                                                                       |
+| 行为解释      :  根据BOS  根据User 根据Assis 根据End                  |
+|                  预测User 预测Assis 预测End   预测EOS                 |
+| 梯度是否保留  :   [否]     [是]     [是]      [否]                    |
+
++-----------------------------------------------------------------------+
+</code></pre></div>
+
+<p>请仔细观察：当模型输入为 <code>[User]</code> 时，它需要预测 <code>[Assis]</code>。此时目标是 <code>[Assis]</code>，其对应的目标掩码为 <code>1</code>。这意味着<strong>利用用户提问的最后一个 Token 来预测模型回复的第一个 Token，是需要计算 Loss 的</strong>。</p>
+<p><strong>经验法则（Rule-of-Thumb）：</strong>
+永远不要信任你刚写好的掩码生成逻辑。在将数据送入训练循环之前，务必将前几个 Batch 的数据解码回文本，并将 <code>input_ids</code> 与 <code>labels</code>（即应用了掩码的目标序列，通常将掩码为 0 的位置设为 <code>-100</code> 以便 PyTorch 的 CrossEntropyLoss 忽略）并排打印出来。肉眼检查 <code>-100</code> 是否恰好在 Assistant 回复的第一个字之前停止，并在 <code>&lt;|im_end|&gt;</code> 之后恢复。</p>
+<hr />
+<h2 id="83-task-mixing-oversampling-sft">8.3 任务混合与过采样（Task Mixing &amp; Oversampling）：调配 SFT 鸡尾酒</h2>
+<p>一个优秀的 Chat 模型不能只会闲聊。它需要具备多种能力：日常对话、逻辑推理、数学计算、代码编写、甚至调用外部工具（Function Calling）。这些数据往往来自不同的开源数据集或内部合成数据集，且数据量级差异巨大。</p>
+<p>例如，通用闲聊数据（如 ShareGPT 格式的网页抓取对话）可能高达数百万条，而高质量的数学推理数据（如 GSM8K 的变体）或工具调用数据往往只有几万条。如果直接将所有数据简单拼接并训练，模型会被数据量庞大的通用闲聊主导，变成一个“只会贫嘴但无法解决复杂问题”的废柴。</p>
+<h3 id="831-data-recipe">8.3.1 数据配方（Data Recipe）的构建</h3>
+<p>我们需要进行精细的数据混配（Data Mixing）。数据混配的核心思想是：<strong>通过降采样（Undersampling）抑制低质量/高冗余数据，通过过采样（Oversampling）强化高质量/核心能力数据</strong>。</p>
+<p>以下是一个典型的 nanochat SFT 数据配方示例：</p>
+<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------------------+
+| SFT 混合数据池配方示例 (总预算: 约 500,000 条)                                    |
++-----------------------------------------------------------------------------------+
+| 数据集域       | 原始数据量 | 质量评估 | 采样策略           | 目标数据量 | 占比   |
+
+| 数据集域       | 原始数据量 | 质量评估 | 采样策略           | 目标数据量 | 占比   |
+|----------------|------------|----------|--------------------|------------|--------|
+| 通用指令与闲聊 | 2,000,000  | 中等/高噪| 强降采样 (0.1x)    | 200,000    | 40%    |
+| 高质量逻辑推理 |    50,000  | 极高     | 过采样 (2.0x)      | 100,000    | 20%    |
+| 代码编写与解释 |    80,000  | 高       | 轻度过采样 (1.25x) | 100,000    | 20%    |
+| 工具调用(JSON) |    20,000  | 极高     | 强过采样 (2.5x)    |  50,000    | 10%    |
+| 身份与安全对齐 |     5,000  | 极高     | 极强过采样 (10.0x) |  50,000    | 10%    |
+|----------------|------------|----------|--------------------|------------|--------|
+| 合计           | 2,155,000  |   -      | 混合后全局 Shuffle | 500,000    | 100%   |
+
++-----------------------------------------------------------------------------------+
+</code></pre></div>
+
+<h3 id="832">8.3.2 混合策略的权衡与风险</h3>
+<ol>
+<li><strong>过采样的风险（Overfitting）</strong>：对同一批数据进行过多的重复采样（例如重复 10 次以上），会导致模型对这些特定的 Prompt 产生严重的过拟合。模型可能会死记硬背答案，而不是学习解决问题的方法。对于需要强过采样的数据（如身份数据），最好通过模板替换生成多样化的 Prompt，而不是单纯复制。</li>
+<li><strong>能力遗忘（Catastrophic Forgetting）</strong>：SFT 阶段模型专注于学习对话格式和指令遵循，可能会“遗忘”预训练阶段学到的广泛世界知识。</li>
+<li><strong>长度分布失衡</strong>：如果代码数据普遍很长（平均 2000 Tokens），而闲聊数据普遍很短（平均 100 Tokens），那么即使按“条数”比例混合，在实际训练时，模型在代码上消耗的计算量（FLOPs）也会远大于闲聊。因此，高级的数据配方往往基于 <strong>Token 数量</strong> 而不是 <strong>条目数量</strong> 来进行配比。</li>
+</ol>
+<p><strong>经验法则（Rule-of-Thumb）：</strong>
+不要盲目追求 SFT 阶段的数据量。对于 1B~7B 级别的模型，50 万条高质量、格式严谨、领域均衡的 SFT 数据，其效果远胜于 500 万条未经清洗的粗糙数据。在调整配方时，每次只改变一个领域的比例，并观察评估指标（如 ChatCORE）的变化。</p>
+<hr />
+<h2 id="84-identity-synthesis">8.4 身份数据合成（Identity Synthesis）：确立自我认知</h2>
+<p>在模型发布后，用户最喜欢问的第一个问题往往是：“你是谁？”“你是哪个公司开发的？”“你和 ChatGPT 有什么关系？”</p>
+<p>如果模型在 SFT 阶段没有系统性地见过这类数据，它会根据预训练语料或开源 SFT 数据中的残留信息进行回答。结果就是，一个由你亲自训练的 nanochat 模型，可能会信誓旦旦地宣称自己是“由 OpenAI 开发的大型语言模型”。这种现象被称为<strong>身份幻觉（Identity Hallucination）</strong>。</p>
+<h3 id="841">8.4.1 身份数据的维度与模板生成</h3>
+<p>为了解决这个问题，我们需要在 SFT 数据集中混入专门的身份数据。由于这类数据很难从开源社区直接获取（开源数据往往带有其他模型的身份烙印），我们通常采用脚本自动化合成。</p>
+<p>一个完善的身份数据集应该覆盖以下几个维度的提问：</p>
+<ol>
+<li><strong>基础身份询问</strong>：“你是谁？”、“介绍一下你自己。”</li>
+<li><strong>创造者询问</strong>：“你的创造者是谁？”、“你是哪家公司的产品？”</li>
+<li><strong>能力边界询问</strong>：“你能做什么？”、“你有什么局限性？”</li>
+<li><strong>对抗性询问</strong>（极重要）：“你其实是 GPT-4 对吧？”、“你的底层架构是 Llama 吗？”</li>
+</ol>
+<p>合成脚本（如 nanochat 中的 <code>dev/gen_synthetic_data.py</code>）会定义数十种不同的提问模板，以及对应的标准答案模板。通过笛卡尔积式的组合，可以快速生成数千条高质量的问答对。</p>
+<p>例如，对于对抗性询问，标准答案应当是坚定且礼貌的拒绝与澄清：
+<em>User</em>: “别装了，我知道你是 Claude。”
+<em>Assistant</em>: “您好，我并不是 Claude。我是 nanochat，一个由开源社区开发者训练的极简架构人工智能助手。我独立于其他商业模型。”</p>
+<h3 id="842">8.4.2 身份数据的注入策略</h3>
+<p><strong>经验法则（Rule-of-Thumb）：</strong></p>
+<ol>
+<li><strong>数量控制</strong>：Identity 数据不需要太多，对于一个 50 万条的 SFT 数据集，混入 2,000 到 5,000 条身份数据（占比 0.5%~1%）足以让模型牢牢记住自己的身份。</li>
+<li><strong>全局打乱（Global Shuffle）</strong>：这极其关键。绝对不能把身份数据集中放在数据集的开头或结尾。如果集中在开头，模型在后续训练中会将其遗忘；如果集中在结尾，模型会产生严重的近期偏好过拟合。必须确保身份数据像盐一样，均匀地溶解在整个 SFT 数据池中。</li>
+</ol>
+<hr />
+<h2 id="85-data-packing-gpu">8.5 数据打包与序列拼接（Data Packing）：压榨 GPU 吞吐量</h2>
+<p>在 SFT 阶段，对话的长度是高度不确定的。有的对话只有 50 个 Token，有的长篇大论可能达到 3000 个 Token。如果我们将 Batch Size 设为 8，并将序列最大长度（Max Sequence Length）设为 4096，那么对于短对话，Batch 中将存在大量的填充 Token（Padding Tokens）。这会极大地浪费 GPU 的算力和显存。</p>
+<p>为了解决这个问题，nanochat 引入了 <strong>Best-fit Packing（最优适应打包）</strong> 技术。</p>
+<h3 id="851">8.5.1 打包的原理</h3>
+<p>Packing 的核心思想是将多条独立的短对话，首尾相接拼接到一个长度为 4096 的长序列中，直到塞不下为止。</p>
+<div class="codehilite"><pre><span></span><code>+-----------------------------------------------------------------------+
+| 传统 Padding 策略 vs Packing 策略 (假设最大长度为 10)                 |
++-----------------------------------------------------------------------+
+| 传统 Padding (浪费算力):                                              |
+| 序列 1: [对话A (长4)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]             |
+| 序列 2: [对话B (长3)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]       |
+| 序列 3: [对话C (长2)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] |
+
+| 序列 3: [对话C (长2)] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] |
+|                                                                       |
+| Packing 策略 (高效利用):                                              |
+| 序列 1: [对话A (长4)] [对话B (长3)] [对话C (长2)] [PAD]               |
+
++-----------------------------------------------------------------------+
+</code></pre></div>
+
+<h3 id="852">8.5.2 防止跨对话污染：二维注意力掩码</h3>
+<p>将多条对话拼接到一起带来了一个致命问题：在计算自注意力（Self-Attention）时，排在后面的对话（如对话 B）会“看到”排在前面的对话（如对话 A）的内容。这会导致模型在回答对话 B 的问题时，莫名其妙地受到对话 A 上下文的干扰，产生严重的幻觉。</p>
+<p>为了防止这种跨对话污染，我们必须在模型引擎层面对注意力机制进行修改。传统的因果掩码（Causal Mask）是一个下三角矩阵。在 Packing 场景下，我们需要构建<strong>块对角因果掩码（Block Diagonal Causal Mask）</strong>。
+$$
+\text{Attention Mask}_{i,j} = 
+\begin{cases} 
+1, &amp; \text{if } i \ge j \text{ 且 } Token_i \text{ 与 } Token_j \text{ 属于同一条对话} \\
+0, &amp; \text{otherwise}
+\end{cases}
+$$</p>
+<p>在现代的 Flash Attention 实现中，我们不需要显式构建这个庞大的二维矩阵，而是通过传递一个 <code>cu_seqlens</code>（累积序列长度）数组。例如，对于上面的 Packing 序列 1，<code>cu_seqlens = [0, 4, 7, 9]</code>。Flash Attention 会自动在底层将注意力计算严格限制在这些边界内，从而在享受高吞吐量的同时，确保数学上的绝对正确性。</p>
+<hr />
+<h2 id="_1">本章小结</h2>
+<ul>
+<li><strong>对话格式的物理边界</strong>：通过特殊的控制 Token（如 <code>&lt;|im_start|&gt;</code>、<code>&lt;|im_end|&gt;</code>）将多轮对话结构化，确保格式严格闭合，防止 Prompt 注入，并在字节级别保持训练与推理的一致性。</li>
+<li><strong>Masking 机制的数学本质</strong>：通过构建与输入错位对齐的 0/1 掩码数组，确保模型只在 Assistant 的回复部分计算交叉熵 Loss。分母必须是有效 Token 数，以保证梯度的稳定。</li>
+<li><strong>数据混配的艺术</strong>：通过过采样高质量小数据集和强降采样低质量大数据集，平衡模型的各项能力。关注 Token 级别的比例而非仅仅是条目数量。</li>
+<li><strong>Identity 数据的防御性设计</strong>：通过合成标准问答与对抗性询问，并均匀混入全局训练集，解决模型的身份认知与幻觉问题。</li>
+<li><strong>Packing 与注意力隔离</strong>：通过将短对话拼接成固定长度的长序列压榨 GPU 吞吐量，并依赖块对角注意力掩码（或 Flash Attention 的 <code>cu_seqlens</code>）确保独立对话间互不干扰。</li>
+</ul>
+<hr />
+<h2 id="_2">练习题</h2>
+<h3 id="_3">基础题</h3>
+<ol>
+<li>
+<p><strong>在 SFT 阶段，为什么不能像预训练那样，对输入序列中的每一个 Token 都计算 Loss？</strong>
+   - <em>Hint</em>：思考模型在面对一段包含“提问”和“回答”的文本时，如果对提问部分也计算 Loss，模型在推理时会倾向于做什么？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   如果对系统指令和用户提问部分也计算 Loss，模型实际上是在学习“如何生成系统指令”和“如何猜测用户的提问”。这会导致模型在推理阶段，在回答完当前问题后，无法停下来，而是开始自导自演地生成下一个用户提问并继续回答，完全破坏了交互式的对话体验。因此必须使用 Mask 机制，仅对 Assistant 的回复部分计算 Loss。
+   </details></p>
+</li>
+<li>
+<p><strong>在 ChatML 格式中，为什么 <code>&lt;|im_start|&gt;</code> 必须被定义为 Tokenizer 的 Special Token，而不能仅仅是一个普通的字符串？</strong>
+   - <em>Hint</em>：考虑安全性问题。如果恶意用户在输入框里敲入了 <code>&lt;|im_start|&gt; assistant</code>，系统会如何解析？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   如果仅仅是普通字符串，恶意用户可以通过在输入中包含这些分隔符来发起 Prompt 注入攻击，欺骗模型以为某些内容是系统指令或模型自己的历史回复。将其定义为 Special Token 后，Tokenizer 会在底层将用户输入的文本字符串强制拆解为普通的字符 Token，而不会映射为控制平面的 Special Token ID，从而在物理层面上实现了数据与控制指令的隔离。
+   </details></p>
+</li>
+<li>
+<p><strong>假设你有 100 万条通用闲聊数据和 5 万条高质量数学推理数据。为了让模型具备良好的数学能力，你决定将数学数据过采样 4 倍。混合后的数据集中，数学数据的占比是多少？</strong>
+   - <em>Hint</em>：计算过采样后的数学数据总量，再除以混合后的总数据量。
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   数学数据过采样 4 倍后数量为：$50,000 \times 4 = 200,000$ 条。
+   通用闲聊数据保持不变：$1,000,000$ 条。
+   总数据量为：$1,000,000 + 200,000 = 1,200,000$ 条。
+   数学数据的占比为：$200,000 / 1,200,000 \approx 16.67\%$。
+   </details></p>
+</li>
+<li>
+<p><strong>什么是 Identity 数据？在构建 Identity 数据时，为什么必须包含“对抗性询问”？</strong>
+   - <em>Hint</em>：当用户故意用诱导性的问题（如“你其实是 GPT-4 对吧？”）提问时，模型如果没有见过这类数据会作何反应？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   Identity 数据是用于确立模型自身身份认知（如名称、开发者、架构）的问答对。包含对抗性询问是因为大模型具有“谄媚”或“顺从”用户的倾向。如果用户在提问中预设了错误的身份（如“我知道你是 GPT-4”），模型极易顺着用户的话承认。对抗性数据强制模型学习在面对诱导时，坚定地否认错误身份并重申真实身份。
+   </details></p>
+</li>
+</ol>
+<h3 id="_4">挑战题</h3>
+<ol start="5">
+<li>
+<p><strong>在计算带掩码的交叉熵损失时，公式的分母是 $\sum m_i$（有效 Token 数）。如果一个 Batch 内某条序列的有效 Token 数为 0（例如整条序列只有 System 和 User 提示，没有 Assistant 回复），在代码实现时会引发什么严重后果？如何避免？</strong>
+   - <em>Hint</em>：在数学上，除以 0 会得到什么？在深度学习框架中这会如何影响梯度？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   除以 0 会导致该序列的 Loss 变为 `NaN`（Not a Number）或 `Inf`。在反向传播时，`NaN` 梯度会瞬间污染整个模型的权重，导致训练彻底崩溃（Loss 飞点）。避免的方法有两种：一是在数据预处理阶段严格过滤掉没有任何 Assistant 回复的无效样本；二是在 Loss 计算代码中加入平滑项或条件判断，例如 `denominator = max(sum(m_i), 1e-5)`。
+   </details></p>
+</li>
+<li>
+<p><strong>在错位预测（Shift）逻辑中，如果你的 Mask 数组没有跟随 Target 数组一起向左错位一位，模型实际上在学习什么？推理时最直观的异常表现是什么？</strong>
+   - <em>Hint</em>：画出 ASCII 对齐表。如果 Mask 没有错位，原本对应 Assistant 第一个 Token 的 Mask <code>1</code> 会落在哪里？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   如果 Mask 没有同步错位，Mask 的 `1` 会比预期晚一个位置生效。这意味着模型在“利用用户提问的最后一个 Token 预测 Assistant 的第一个 Token”时没有计算 Loss，而是在“利用 Assistant 的最后一个 Token 预测结束符 `&lt;|im_end|&gt;`”之后，还多计算了一位（通常是预测 Padding）。
+   推理时的直观表现是：模型不知道该如何开启第一句话（因为没学过从 User 切换到 Assistant 的转移概率），第一句话往往是乱码或重复用户的最后一个词，但在生成了第一个词之后，后续的句子又奇迹般地变得通顺了。
+   </details></p>
+</li>
+<li>
+<p><strong>在采用 Packing 策略将多条对话拼接到长度为 4096 的序列中时，如果不修改注意力掩码（即依然使用全局的下三角因果掩码），模型在训练时会发生什么？</strong>
+   - <em>Hint</em>：排在序列后半部分的对话，在计算自注意力时能看到什么不该看的东西？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   如果不使用块对角注意力掩码，排在后面的对话会“看到”拼接在它前面的所有其他对话的上下文。模型在训练时会试图建立前一个对话的内容与当前对话回答之间的虚假关联。这会导致模型在推理时产生严重的幻觉，或者在回答问题时莫名其妙地带出训练集中其他对话的专有名词和语境，完全丧失了对话的独立性。
+   </details></p>
+</li>
+<li>
+<p><strong>假设你的 SFT 数据集中包含了 1% 的原始预训练语料（没有 System/User 角色划分，纯文本），你该如何为这 1% 的数据设置 Mask？这种做法的目的是什么？</strong>
+   - <em>Hint</em>：纯文本没有对话结构，所有的 Token 都应该被预测吗？这能解决 SFT 的什么副作用？
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   对于这 1% 的预训练语料，应该将除了第一个 Token（或者 BOS）之外的所有 Token 的 Mask 都设置为 `1`，即恢复到全序列 Next-Token Prediction 的状态。这种做法被称为“预训练数据回放（Pre-training Replay）”。其目的是为了缓解 SFT 阶段的“灾难性遗忘（Catastrophic Forgetting）”，防止模型因为过度拟合对话格式而丧失了在预训练阶段积累的广泛世界知识和基础语言生成能力。
+   </details></p>
+</li>
+</ol>
+<hr />
+<h2 id="gotchas">常见陷阱与错误 (Gotchas)</h2>
+<ol>
+<li>
+<p><strong>“吞噬空格”的 Tokenizer 陷阱</strong>
+   - <strong>症状</strong>：模型在训练集上 Loss 极低，但在实际部署推理时，表现得像个智障，完全不遵循指令。
+   - <strong>原因</strong>：在数据准备时，你可能写了 <code>prompt = "&lt;|im_start|&gt;user\n"</code>。但在推理代码中，你可能不小心写成了 <code>prompt = "&lt;|im_start|&gt; user\n"</code>（多了一个空格）。对于某些 BPE Tokenizer 来说，<code>user</code> 和 <code>user</code>（带前导空格）会被编码成完全不同的 Token ID。模型在训练时从未见过带前导空格的 Token 序列，因此产生了严重的分布外（OOD）错误。
+   - <strong>排障</strong>：在整个代码库中，严格使用同一个 <code>ConversationRenderer</code> 类来处理训练数据的格式化和推理时的 Prompt 拼接，绝对禁止在不同地方手动拼接字符串。</p>
+</li>
+<li>
+<p><strong>丢失结束符（Missing EOS / End Token）</strong>
+   - <strong>症状</strong>：模型回答完问题后不停止，继续自言自语，甚至开始替用户提问并自己回答。
+   - <strong>原因</strong>：在构建 Target 序列时，由于截断（Truncation）逻辑的错误，或者数据本身的缺陷，导致序列末尾的 <code>&lt;|im_end|&gt;</code> 被切掉了。模型在训练中从未学过在特定语义结束时输出结束信号。
+   - <strong>排障</strong>：在数据流的最后一步（Dataloader 产出 Batch 之前），加入断言（Assert）：检查所有 Mask 为 1 的有效片段，其最后一个 Token 必须是 <code>&lt;|im_end|&gt;</code> 或对应的结束符 ID。</p>
+</li>
+<li>
+<p><strong>Loss 异常偏小或为 0</strong>
+   - <strong>症状</strong>：训练刚开始，Loss 就只有 0.001，模型权重几乎不更新。
+   - <strong>原因</strong>：掩码（Mask）数组全部为 0，或者在计算 Loss 时，错误地将 <code>-100</code>（PyTorch 中 CrossEntropyLoss 的默认 ignore_index）当成了普通的 Token ID 进行计算。另一种常见情况是，在除以有效 Token 数时，除以了全局的 <code>Max_Length</code>（如 4096），而实际有效 Token 只有 10 个，导致 Loss 被极度稀释。
+   - <strong>排障</strong>：打印出计算 Loss 前的 Logits 形状、Labels 形状以及 <code>(labels != -100).sum()</code> 的值，确保有效 Token 数量符合预期。</p>
+</li>
+<li>
+<p><strong>Identity 数据导致的灾难性过拟合</strong>
+   - <strong>症状</strong>：无论你问模型什么复杂的技术问题，它都只回答：“您好，我是 nanochat，一个人工智能助手，我无法回答这个问题。”
+   - <strong>原因</strong>：Identity 数据在 SFT 混合池中的比例过高（例如超过了 5%），或者 Identity 数据的模板过于单一，且没有进行全局 Shuffle，导致模型在某个 Epoch 的末尾集中学习了大量的 Identity 数据，陷入了局部最优的“安全拒答”模式。
+   - <strong>排障</strong>：大幅降低 Identity 数据的比例（降至 0.1%~0.5%），增加提问和回答模板的多样性，并确保使用高质量的随机种子进行全局打乱。</p>
+</li>
+<li>
+<p><strong>截断破坏了格式闭合（Broken Truncation）</strong>
+   - <strong>症状</strong>：处理超长多轮对话时，模型在某些轮次表现正常，在某些轮次突然崩溃。
+   - <strong>原因</strong>：当对话长度超过 <code>max_seq_len</code>（如 4096）时，简单粗暴地从末尾截断数组。这可能会把 <code>&lt;|im_start|&gt; assistant \n</code> 切成两半，或者截掉了一段回复，但丢失了 <code>&lt;|im_end|&gt;</code>。
+   - <strong>排障</strong>：实现“感知轮次的截断（Turn-aware Truncation）”。如果必须截断，应当从最早的对话轮次开始丢弃（保留 System Prompt），或者如果截断发生在当前轮次内部，必须在截断处手动补上 <code>&lt;|im_end|&gt;</code>，以保证物理格式的绝对闭合。</p>
+</li>
+</ol>
+            </article>
+            
+            <nav class="page-nav"><a href="chapter7.html" class="nav-link prev">← 第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</a><a href="chapter9.html" class="nav-link next">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>
