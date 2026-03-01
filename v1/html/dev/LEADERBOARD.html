@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="../">
+    <title>Leaderboard</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder expanded" data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item active" style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="leaderboard">Leaderboard</h1>
+<p>Docs on participating in the "Time-to-GPT-2" leaderboard of nanochat.</p>
+<p>The primary metric we care about is "time to GPT-2" - the wall clock time needed to outperform the GPT-2 (1.6B) CORE metric on an 8XH100 GPU node. Originally in 2019, GPT-2 was trained by OpenAI on 32 TPU v3 chips for 168 hours (7 days), with $8/hour/TPUv3 back then, for a total cost of approx. $43K. It achieves 0.256525 CORE score, which is an ensemble metric introduced in the DCLM paper over 22 evaluations like ARC/MMLU/etc.</p>
+<h2 id="how-to">How to</h2>
+<p>The script <a href="runs/speedrun.sh">runs/speedrun.sh</a> always implements the current state of the art on the leaderboard.</p>
+<p>In practice, I tune the base_train command a little bit. For example, once all the setup is configured and a tokenizer is trained, I like to do something like:</p>
+<div class="codehilite"><pre><span></span><code>OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+    --depth=26 \
+    --run=&quot;d26-feb2-fp8-ratio8.25&quot; \
+    --model-tag=&quot;d26_feb2_fp8_ratio8.25&quot; \
+    --device-batch-size=16 \
+    --sample-every=-1 \
+    --save-every=-1 \
+    --core-metric-max-per-task=-1 \
+    --core-metric-every=999999 \
+    --target-param-data-ratio=8.25 \
+    --fp8
+</code></pre></div>
+
+<p>Note that:</p>
+<ul>
+<li><code>depth</code> controls the size of the Transformer</li>
+<li><code>run</code> is the wandb name</li>
+<li><code>model-tag</code> is the location of the checkpoints on disk</li>
+<li><code>device-batch-size</code> in the ideal world, you want this to be 32 because with sequence length of 2048 (the default) and 8 GPUs we get <code>32 X 2048 X 8 = 524,288</code>, which is the total desired batch size determined to work fairly well around this scale. However, for bigger (e.g. d26), 32 is too much and OOMs, so we decrease it by 2 to 16. The <code>base_train.py</code> script automatically compensates for this by calculating that it has to use gradient accumulation of 2 to meet the desired total batch size. Therefore, it will do forward+backward twice and then a single step. Long story short, the ideal value is 32. If that doesn't fit, you decrease it, e.g. 16, 8, etc., keeping it powers of two so that the gradient accumulation math works out neatly.</li>
+<li><code>sample-every = -1</code> turns off periodic sampling</li>
+<li><code>core-metric-max-per-task=-1</code> means we run the entire CORE eval</li>
+<li><code>core-metric-every=999999</code> a bit of a hacky way to make the CORE eval only happen a single time at the very end of the run</li>
+<li><code>target-param-data-ratio=8.25</code> controls the training horizon, which is determined in the script by taking the number of non-embedding model parameters and simply multiplying by this number. The current optimal Tokens:Params ratio can be seen in the defaults of the <code>base_train.py</code> script (it is 10.5). 10.5 would produce the <em>compute optimal</em> model given the currently measured scaling laws. However, GPT-2 capability is currently somewhere in between a d24 and d26. So to reach it exactly, we want to either overtrain d24 or undertrain d26. In this particular example, I am choosing to slightly undertrain a d26. Note that odd depths (e.g. d25) are not super recommended to use because the math around the transformer sizing and its head dimensions doesn't come out neatly.</li>
+<li><code>--fp8</code> turns on fp8 training. If your GPU does not support fp8, you can leave this out and the code will simply train in bf16. bf16 is higher precision than fp8, so you can actually expect that you might be able to do fewer steps (lower the <code>target-param-data-ratio</code>) to achieve the same capability.</li>
+</ul>
+<p>Once you kick off the run, you wait ~3 hours and then at the end you'll see something like:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">wandb</span><span class="o">:</span><span class="w"> </span><span class="n">Run</span><span class="w"> </span><span class="n">summary</span><span class="o">:</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">          </span><span class="n">core_metric</span><span class="w"> </span><span class="mf">0.25851</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">                 </span><span class="n">step</span><span class="w"> </span><span class="mi">16704</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w"> </span><span class="n">total_training_flops</span><span class="w"> </span><span class="mf">4.330784131228946</span><span class="n">e</span><span class="o">+</span><span class="mi">19</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">  </span><span class="n">total_training_time</span><span class="w"> </span><span class="mf">10949.46713</span>
+</code></pre></div>
+
+<p>Your CORE metric must be greater than GPT-2 0.256525. Then you report the <code>total_training_time</code>, (e.g. 10949) which is the time of the training iterations alone, excluding all the evaluations and logging, in seconds. So here for example it is roughly 10949/60/60 ~= 3.04 hours. You should also note and report the validation bpb of your run because the CORE metric can be a little bit noisy.</p>
+<p>If you outperform GPT-2 and the time is less than current SOTA in the Leaderboard, you get to make a PR. In addition to raw gains, there are some qualitative and aesthetic considerations that go into whether your improvement is merged. For example, if it is gnarly or it significantly bloats the code, or it seems too esoteric, then we will weigh those things against the improvement demonstrated. Additionally, nanochat cares not only about targeting a single model, but an entire miniseries of models. So your change must be principled enough that it can easily generalize to other model depths, so that we can sweep out a miniseries.</p>
+<p>After you create the commit, to get the current short git commit hash:</p>
+<div class="codehilite"><pre><span></span><code>git log -1 --format=&quot;%h&quot;
+</code></pre></div>
+
+<h2 id="run-1">Run 1</h2>
+<p>Achieved Jan 29 2026 on commit <code>348fbb3</code>. The launch command was</p>
+<div class="codehilite"><pre><span></span><code>OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+    --depth=24 \
+    --run=d24-jan29 \
+    --model-tag=d24_jan29 \
+    --device-batch-size=16 \
+    --sample-every=-1 \
+    --save-every=-1 \
+    --core-metric-max-per-task=-1 \
+    --core-metric-every=3000 \
+    --target-param-data-ratio=12
+</code></pre></div>
+
+<p>The result was:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">wandb</span><span class="o">:</span><span class="w"> </span><span class="n">Run</span><span class="w"> </span><span class="n">summary</span><span class="o">:</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">          </span><span class="n">core_metric</span><span class="w"> </span><span class="mf">0.25851</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">                 </span><span class="n">step</span><span class="w"> </span><span class="mi">16704</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w"> </span><span class="n">total_training_flops</span><span class="w"> </span><span class="mf">4.330784131228946</span><span class="n">e</span><span class="o">+</span><span class="mi">19</span>
+<span class="n">wandb</span><span class="o">:</span><span class="w">  </span><span class="n">total_training_time</span><span class="w"> </span><span class="mf">10949.46713</span>
+</code></pre></div>
+
+<p>The validation bpb was 0.74833.</p>
+<p>Detailed writeup: <a href="https://github.com/karpathy/nanochat/discussions/481">Beating GPT-2 for &lt;&lt;$100: the nanochat journey</a></p>
+<h2 id="run-2">Run 2</h2>
+<p>Achieved Feb 2 2026 on commit <code>a67eba3</code>. The launch command was</p>
+<div class="codehilite"><pre><span></span><code>OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+    --depth=26 \
+    --run=&quot;d26-feb2-fp8-ratio8.5&quot; \
+    --model-tag=&quot;d26_feb2_fp8_ratio8.5&quot; \
+    --device-batch-size=16 \
+    --sample-every=-1 \
+    --save-every=-1 \
+    --core-metric-max-per-task=-1 \
+    --core-metric-every=999999 \
+    --target-param-data-ratio=8.5 \
+    --fp8
+</code></pre></div>
+
+<p>The result was:</p>
+<div class="codehilite"><pre><span></span><code>core_metric 0.2578
+step 14889
+total_training_time 10493
+Minimum validation bpb: 0.745036
+</code></pre></div>
+
+<p>The big change in this run is <code>--fp8</code>, which causes all Linear layers (other than the gates) to be switched to fp8 training using <code>torchao</code> with tensorwise fp8 scaling. Each step is of slightly lower quality, but we are taking them a lot faster, coming out net ahead. Anyone who does not have fp8 (e.g. using a GPU without it) can simply leave out the <code>--fp8</code> flag to train in bfloat16. This will work just fine but it will produce a slightly stronger model than GPT-2 because of the fp8 -&gt; bf16 precision upgrade. It's possible that one can further tune which layers to include in the fp8 conversion and that e.g. some of the smaller matmuls should be just kept in bf16 etc.</p>
+<p>Previous record was 3.04 hours, so 2.91 hours is <code>(3.04 - 2.91)/3.04*100</code> ~= 4.3% speed improvement.</p>
+<h2 id="run-3">Run 3</h2>
+<p>Achieved Feb 5 2026 on commit <code>2c062aa</code>. Launch command:</p>
+<div class="codehilite"><pre><span></span><code>OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+    --depth=26 \
+    --run=&quot;d26_feb4_double_batch_ratio8.25&quot; \
+    --model-tag=&quot;d26_feb4_double_batch_ratio8.25&quot; \
+    --device-batch-size=16 \
+    --total-batch-size=1048576 \
+    --sample-every=-1 \
+    --save-every=-1 \
+    --core-metric-max-per-task=-1 \
+    --core-metric-every=999999 \
+    --target-param-data-ratio=8.25 \
+    --fp8
+</code></pre></div>
+
+<p>Result:</p>
+<div class="codehilite"><pre><span></span><code>core_metric 0.26024
+step 7226
+total_training_time 9922
+Minimum validation bpb: 0.74645
+</code></pre></div>
+
+<p>The big change here is that the batch size was doubled from 0.5M to 1M, which works better for a d26 model and allowed me to decrease the number of optimization steps a bit via <code>--target-param-data-ratio</code> from 8.5 to 8.25. The TLDR is that the original batch size of 0.5M was tuned for d12, but bigger models (e.g. d26) prefer larger total batch size. I determined in experiments that d26 prefers 1M. Then I implemented and merged a principled way to calculate the optimal batch size given depth so that all nanochat models of all depths benefit. See <a href="dev/LOG.html">dev/LOG.md</a> entry "2026-02-05: Auto Batch Size Scaling" for more detail.</p>
+            </article>
+            
+            <nav class="page-nav"><a href="CLAUDE.html" class="nav-link prev">← Untitled</a><a href="dev/LOG.html" class="nav-link next">Experiment Log →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="10-enginekv-cachecliweb-ui">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</h1>
+<p>经过前面章节的预训练、指令微调（SFT）和强化学习（RL），我们已经得到了一个具备对话能力和指令遵循能力的模型权重。然而，对于最终用户或下游评测系统而言，模型本身仅仅是一个静态的参数文件（Checkpoint）和一份词表（Tokenizer）。本章将探讨如何将“能训”的静态模型转化为“能聊”的动态系统。</p>
+<p>在 nanochat 的设计哲学中，推理流水线（Inference Pipeline）被设计为最小化且高度透明的。我们不依赖庞大的第三方推理框架（如 vLLM 或 TGI），而是用最基础的 PyTorch 张量操作从零构建一个推理引擎（Engine）。这不仅是为了教学目的，更是为了让数据准备人员和模型训练人员能够彻底看清：数据在进入模型前到底经历了什么格式化，模型吐出的 Logits 是如何变成文字的，以及特殊 Token 是如何控制整个系统流转的。</p>
+<p>本章将深入拆解自回归生成的引擎核心、用于加速的 KV Cache 机制、工具调用的状态机流转，以及如何通过命令行（CLI）和 Web 界面与模型进行交互。</p>
+<hr />
+<h2 id="101-kv-cache">10.1 自回归生成与 KV Cache 机制</h2>
+<p>大语言模型的推理本质上是一个自回归（Autoregressive）过程：给定一段前缀（Prompt），模型预测下一个 Token，然后将该 Token 拼接到输入序列中，再次预测下一个 Token，如此循环，直到生成停止符或达到最大长度。</p>
+<h3 id="1011-prefill-decode">10.1.1 Prefill 与 Decode 阶段</h3>
+<p>在实际的推理引擎中，这个自回归过程被严格划分为两个阶段：</p>
+<ol>
+<li><strong>Prefill（预填充）阶段</strong>：用户一次性输入了一段较长的 Prompt（包含 System Prompt、历史对话和当前问题）。引擎将这段 Prompt 一次性送入模型，并行计算所有 Token 的特征，并生成第一个输出 Token。这个阶段计算密集，受限于算力（Compute-bound）。</li>
+<li><strong>Decode（解码）阶段</strong>：引擎拿到上一步生成的单个 Token，将其送入模型，仅计算这一个 Token 的特征，从而生成下一个 Token。这个阶段访存密集，受限于显存带宽（Memory-bound）。</li>
+</ol>
+<h3 id="1012-kv-cache">10.1.2 为什么需要 KV Cache？</h3>
+<p>如果不做任何优化，在 Decode 阶段，每次预测下一个 Token 时，模型都需要对整个历史序列重新计算注意力（Attention）。</p>
+<p>标准的注意力机制公式为：
+$$ Attention(Q, K, V) = softmax\left(\frac{Q K^T}{\sqrt{d_k}}\right) V $$
+假设当前序列长度为 $t$，在预测第 $t+1$ 个 Token 时，我们需要计算第 $t$ 个 Token 的 Query（记为 $q_t$）与所有历史 Token 的 Key（记为 $k_1, k_2, \dots, k_t$）的点积。
+随着序列长度 $T$ 的增加，如果不加缓存，计算量将呈 $O(T^2)$ 增长，这在长对话中是不可接受的。</p>
+<p>仔细观察注意力机制的因果掩码（Causal Mask）特性会发现：第 $i$ 个 Token 的 Key 和 Value 一旦计算出来，在后续生成任何 Token 时，它们的值都不会再改变。因此，我们完全可以将它们缓存下来。这就是 KV Cache 的核心思想。</p>
+<div class="codehilite"><pre><span></span><code>================================================================================
+[无 KV Cache 的朴素生成：存在大量冗余计算]
+Step 1: 输入 [A, B]       -&gt; 计算 Attention(A, B)       -&gt; 输出 C
+Step 2: 输入 [A, B, C]    -&gt; 计算 Attention(A, B, C)    -&gt; 输出 D
+Step 3: 输入 [A, B, C, D] -&gt; 计算 Attention(A, B, C, D) -&gt; 输出 E
+(注意：Step 3 中，A、B、C 的 K 和 V 被重新计算了一遍)
+
+================================================================================
+[使用 KV Cache 的高效生成：空间换时间]
+显存中预先分配一块大张量作为 KV Cache: Shape = (Batch, Max_Seq_Len, Num_Heads, Head_Dim)
+
+[Prefill 阶段]
+输入 [A, B] 
+-&gt; 计算 K_{A,B}, V_{A,B} 
+-&gt; 存入缓存槽位 [0:2] 
+-&gt; 计算 Attention -&gt; 输出 C
+
+[Decode 阶段]
+Step 1: 
+输入 [C] (形状为 Bx1)
+-&gt; 仅计算 C 的 K_{C}, V_{C} 
+-&gt; 追加到缓存槽位 [2:3]，此时缓存为 [K_{A,B,C}, V_{A,B,C}]
+-&gt; 仅使用 C 的 Query(C) 与 缓存的 K,V 计算 Attention 
+-&gt; 输出 D
+
+Step 2: 
+输入 [D] (形状为 Bx1)
+-&gt; 仅计算 D 的 K_{D}, V_{D} 
+-&gt; 追加到缓存槽位 [3:4]，此时缓存为 [K_{A,B,C,D}, V_{A,B,C,D}]
+-&gt; 仅使用 D 的 Query(D) 与 缓存的 K,V 计算 Attention 
+-&gt; 输出 E
+================================================================================
+</code></pre></div>
+
+<p>通过 KV Cache，每一步 Decode 的计算复杂度从 $O(T^2)$ 降到了 $O(T)$，极大地提升了吞吐量。在 nanochat 的 Engine 实现中，KV Cache 通常被预先分配为一块连续的显存张量，以避免生成过程中频繁的内存分配开销和显存碎片化。</p>
+<p><strong>Rule-of-thumb（经验法则）：</strong>
+在单机推理时，显存的占用主要由两部分构成：模型权重（静态）和 KV Cache（动态）。如果你的模型加载后还剩 8GB 显存，你需要根据公式 $2 \times \text{Layers} \times \text{Max_Seq_Len} \times \text{Hidden_Dim} \times \text{Batch_Size}$ 来反推你最大能支持的并发数和上下文长度，否则在 Decode 阶段必定遭遇 OOM（Out of Memory）。</p>
+<hr />
+<h2 id="102">10.2 采样策略与温度控制</h2>
+<p>模型最后一个线性层（LM Head）输出的并不是直接的文本，而是一个形状为 <code>(Batch_Size, Vocab_Size)</code> 的对数几率（Logits）张量。我们需要通过采样策略将这些连续的浮点数转化为离散的 Token ID。</p>
+<h3 id="1021-temperature">10.2.1 温度控制（Temperature）</h3>
+<p>最基础的转换是 Softmax 函数，它将 Logits 转化为概率分布。为了控制生成的多样性，我们引入了温度参数（Temperature，记为 $T$）。带有温度控制的概率分布公式如下：
+$$ P(x_i) = \frac{\exp(z_i / T)}{\sum_{j=1}^{|V|} \exp(z_j / T)} $$
+其中 $z_i$ 是第 $i$ 个 Token 的 Logit 值，$|V|$ 是词表大小。</p>
+<p>温度 $T$ 是一个极其关键的超参数：</p>
+<ul>
+<li><strong>当 $T = 1.0$ 时</strong>，等价于标准的 Softmax，反映了模型训练时的原始概率分布。</li>
+<li><strong>当 $T \to 0$ 时</strong>（通常在代码中实现为直接取 <code>argmax</code>），概率分布趋于集中在最大 Logit 对应的 Token 上。这被称为贪婪搜索（Greedy Decoding）。贪婪搜索的输出最稳定，但也最容易陷入“复读机”式的重复循环，缺乏创造力。</li>
+<li><strong>当 $T &gt; 1.0$ 时</strong>（例如 $T = 1.5$），指数项的作用被削弱，概率分布变得更加平缓（Flattened）。原本概率极低的 Token 现在也有了被选中的机会，这极大增加了生成的多样性，但也容易导致模型输出不连贯的乱码（幻觉）。</li>
+</ul>
+<div class="codehilite"><pre><span></span><code>[不同温度下的概率分布示意图]
+
+Logits: [10.0, 8.0, 5.0, 1.0] (对应 Token: A, B, C, D)
+
+T = 0.1 (极低温度，尖锐化)
+P(x) |
+ 1.0 |  * (A: ~99.99%)
+     |
+     |
+ 0.0 |____*____*____*____
+       A    B    C    D
+
+T = 1.0 (标准温度)
+P(x) |
+ 0.8 |  * (A: ~88%)
+     |
+ 0.1 |       * (B: ~11%)
+ 0.0 |_________*____*____
+       A    B    C    D
+
+T = 5.0 (极高温度，平缓化)
+P(x) |
+ 0.4 |  *    * 
+ 0.2 |            *
+ 0.0 |________________*__
+       A    B    C    D
+</code></pre></div>
+
+<h3 id="1022-top-k-top-p">10.2.2 截断策略：Top-K 与 Top-p</h3>
+<p>仅仅调整温度是不够的，因为词表中往往包含数万个 Token，长尾部分充满了完全不合逻辑的词汇。为了防止模型在采样时“抽风”选中这些长尾 Token，我们需要截断策略。</p>
+<p><strong>Top-K 采样</strong>：
+在每一步中，只保留概率最高的 $K$ 个 Token，将它们的概率重新归一化，其余 Token 的概率强制设为 0。这种方法简单粗暴，但存在缺陷：在分布非常平缓时，$K$ 个 Token 可能不足以涵盖所有合理的选择；而在分布非常尖锐时，$K$ 个 Token 又可能包含太多不合理的选择。</p>
+<p><strong>Top-p 采样（核采样，Nucleus Sampling）</strong>：
+Top-p 是一种动态截断策略。我们将所有 Token 按概率从大到小排序，然后按顺序累加概率，直到累加和首次超过阈值 $p$（例如 $p=0.9$）。此时，我们只在这个累加集合（称为“核”）中进行采样。</p>
+<p>数学定义为，寻找最小的词汇子集 $V^{(p)} \subset V$，使得：
+$$ \sum_{x \in V^{(p)}} P(x) \ge p $$</p>
+<p>Top-p 能够根据当前概率分布的形状动态调整保留的 Token 数量：当模型非常确信时（分布尖锐），保留的 Token 很少；当模型不确信时（分布平缓），保留的 Token 较多。nanochat 默认推荐使用 Top-p 采样。</p>
+<p><strong>Rule-of-thumb（经验法则）：</strong>
+在代码补全或数学推理任务中，需要极高的逻辑严密性，建议设置 $T=0.1$ 或直接使用贪婪搜索；在日常闲聊或创意写作任务中，建议设置 $T=0.7$ 且 $p=0.95$，以获得既连贯又丰富的输出。永远不要同时使用极高的温度和极大的 Top-p 值。</p>
+<hr />
+<h2 id="103-tool-calling">10.3 工具调用（Tool Calling）的状态机</h2>
+<p>现代 Chat 模型（尤其是经过 SFT 和 RL 微调的模型）通常具备调用外部工具（如计算器、搜索引擎、数据库查询）的能力。在 nanochat 中，工具调用不是通过复杂的外部启发式规则（如正则表达式硬匹配）实现的，而是完全融入了自回归生成的生命周期中，表现为一个由特殊 Token（Special Tokens）驱动的有限状态机（Finite State Machine, FSM）。</p>
+<h3 id="1031-token">10.3.1 格式约定与特殊 Token</h3>
+<p>为了让模型知道何时调用工具、何时停止，我们定义了一套严格的 ChatML 扩展格式。假设我们有以下特殊 Token：</p>
+<ul>
+<li><code>&lt;|im_start|&gt;</code>：消息块的开始</li>
+<li><code>&lt;|im_end|&gt;</code>：消息块的结束</li>
+<li><code>&lt;|tool_call|&gt;</code>：模型决定调用工具的标志</li>
+<li><code>&lt;|tool_result|&gt;</code>：外部系统向模型注入工具执行结果的标志</li>
+</ul>
+<h3 id="1032">10.3.2 状态机流转图</h3>
+<p>当用户输入包含工具描述时，Engine 内部维护着一个状态变量。以下是完整的状态流转过程：</p>
+<div class="codehilite"><pre><span></span><code>================================================================================
+           [nanochat 工具调用状态机 (Tool Calling FSM)]
+
+[状态: WAIT_FOR_USER]
+       │
+       ▼ 用户输入包含工具定义的 Prompt
+[状态: PREFILL] ────────► 将 Prompt 编码并送入模型计算 KV Cache
+       │
+       ▼
+[状态: GENERATING] ◄─────────────────────────────────────────┐
+       │                                                     │
+       ▼                                                     │
+  模型自回归生成下一个 Token                                 │
+       │                                                     │
+       ├─► 如果是普通文本 Token ─► 追加到输出缓冲区，继续 ───┤
+       │                                                     │
+       ├─► 如果是 &lt;|tool_call|&gt; Token                        │
+       │          │                                          │
+       │          ▼                                          │
+       │   [状态: PAUSED_FOR_TOOL]                           │
+       │          │                                          │
+       │          ▼                                          │
+       │   模型继续生成工具的 JSON 参数，直到遇到 &lt;|im_end|&gt;│
+       │          │                                          │
+       │          ▼                                          │
+       │   Engine 拦截输出，解析 JSON 并执行本地 Python 函数 │
+       │          │                                          │
+       │          ▼                                          │
+       │   将函数返回值包装为:                               │
+       │   &lt;|im_start|&gt;tool_result\n{...}&lt;|im_end|&gt;          │
+       │          │                                          │
+       │          ▼                                          │
+       │   将包装后的结果 Tokenize，并作为强制输入送入模型   │
+       │          │                                          │
+       │          ▼                                          │
+       │   (状态恢复至 GENERATING) ──────────────────────────┘
+       │
+       └─► 如果是 &lt;|im_end|&gt; 且非工具调用 ─► (对话轮次结束)
+                                             │
+           ┌─────────────────────────────────┘
+           │
+           ▼
+[状态: WAIT_FOR_USER] 等待用户的下一轮输入
+================================================================================
+</code></pre></div>
+
+<p>在这个状态机中，数据准备人员和推理侧工程师必须达成绝对的共识：<strong>SFT 阶段构造的工具调用轨迹，必须与推理时 Engine 注入的特殊 Token 格式保持像素级（字节级）的一致。</strong></p>
+<p>例如，如果在 SFT 数据中，<code>&lt;|tool_call|&gt;</code> 后面紧跟了一个换行符 <code>\n</code>，那么在推理时，Engine 解析 JSON 的逻辑就必须考虑到这个换行符；如果外部注入的 <code>&lt;|tool_result|&gt;</code> 缺少了闭合的 <code>&lt;|im_end|&gt;</code>，模型就会陷入困惑，试图自己去补全工具的输出，而不是基于工具结果进行总结。</p>
+<p><strong>Rule-of-thumb（经验法则）：</strong>
+调试工具调用失败的第一步，永远是把 Engine 实际喂给模型的完整字符串（Decode 后的纯文本，包含所有特殊 Token）打印出来，并与 SFT 训练集中的一条样本放到文本比对工具（Diff Tool）中逐个字符对比。90% 的工具调用失败都是因为多了一个空格或少了一个换行。</p>
+<hr />
+<h2 id="104-web">10.4 命令行与 Web 交互界面</h2>
+<p>为了让模型真正“可用”并提供良好的用户体验，nanochat 提供了两种开箱即用的交互界面：<code>scripts/chat_cli.py</code> 和 <code>scripts/chat_web.py</code>。它们是 Engine 的外壳，负责处理 I/O、流式传输和多轮对话的上下文管理。</p>
+<h3 id="1041-cli">10.4.1 命令行界面（CLI）与流式输出</h3>
+<p>CLI 是最轻量级的调试工具，非常适合在无图形界面的 GPU 服务器上快速验证模型。CLI 的核心难点在于如何优雅地处理流式输出（Streaming）。</p>
+<p>在自回归生成中，模型是一个一个 Token 吐出结果的。如果等整句话生成完再打印，用户会感到明显的卡顿（即首字延迟 TTFT 过高）。因此，我们需要在 Engine 每生成一个 Token 时，立即将其解码并打印到终端。</p>
+<p>然而，Token 并不总是对应完整的字符。例如，在 UTF-8 编码中，一个中文字符可能被切分成 3 个 Byte Token。如果模型刚吐出前 2 个 Byte Token，此时调用 Tokenizer 的 Decode 会得到乱码（通常显示为 ``）。
+nanochat 的 CLI 实现中，采用了一个带缓冲区的流式解码器（Streaming Decoder）：它会暂存无法构成完整 Unicode 字符的残缺字节，直到接收到后续 Token 拼凑成完整字符后，再将其刷新（Flush）到终端。</p>
+<h3 id="1042-web-server-sent-events-sse">10.4.2 Web 界面与 Server-Sent Events (SSE)</h3>
+<p>对于面向普通用户的展示，Web 界面是必不可少的。<code>chat_web.py</code> 通过一个极简的 HTTP 服务器将 Engine 包装为 API 服务。</p>
+<p>在 Web 场景下实现打字机效果，传统的 HTTP 请求-响应模型是不适用的。如果前端使用轮询（Polling）不断询问后端是否有新 Token，会产生巨大的网络开销。nanochat 采用了 Server-Sent Events (SSE) 协议。</p>
+<p>SSE 是一种基于 HTTP 的单向长连接技术。客户端发起请求后，服务器保持连接不断开，并通过 <code>Transfer-Encoding: chunked</code> 将生成的 Token 逐个作为事件流推送到前端。前端页面（<code>ui.html</code>）通过 JavaScript 的 <code>EventSource</code> API 接收这些事件，并动态更新 DOM，从而实现平滑的流式打字机效果。</p>
+<h3 id="1043-context-truncation">10.4.3 多轮对话的上下文截断（Context Truncation）</h3>
+<p>无论是 CLI 还是 Web UI，都需要维护一个对话历史列表（History）。随着对话轮数的增加，历史记录的 Token 总数迟早会超过模型支持的最大上下文窗口（Max Context Length，例如 4096 或 8192）。一旦越界，模型将无法处理，直接报错。</p>
+<p>此时必须引入上下文截断策略。最简单的策略是直接丢弃最旧的对话轮次。但是，这会引发一个致命问题：<strong>System Prompt 的丢失</strong>。System Prompt 通常位于对话的最开头，包含了模型的人设、核心指令和可用工具列表。如果它被截断，模型会瞬间“失忆”，变成一个毫无约束的通用补全模型。</p>
+<p>nanochat 采用的是<strong>保留头部的滑动窗口策略</strong>：</p>
+<div class="codehilite"><pre><span></span><code>[上下文截断策略示意图 (最大长度: 4096 tokens)]
+
+原始对话历史:
+[System Prompt] (500 tokens) &lt;--- 必须永远保留
+[User 轮次 1] (200 tokens)   &lt;--- 最旧的对话，优先被丢弃
+[Asst 轮次 1] (300 tokens)   &lt;--- 优先被丢弃
+[User 轮次 2] (150 tokens)
+[Asst 轮次 2] (400 tokens)
+...
+[User 轮次 N] (当前问题, 100 tokens)
+
+截断过程:
+
+1. 计算总长度: 500 + 200 + 300 + 150 + 400 + ... + 100 = 5200 tokens (&gt; 4096)
+2. 锁定 System Prompt (500 tokens)。剩余可用配额 = 4096 - 500 = 3596 tokens。
+3. 从后往前累加对话轮次，直到接近 3596 tokens。
+4. 丢弃前面的 [User 轮次 1] 和 [Asst 轮次 1]。
+5. 重新拼接: [System Prompt] + [User 轮次 2] + [Asst 轮次 2] + ... + [User 轮次 N]
+</code></pre></div>
+
+<p>通过这种策略，模型始终记得自己是谁，同时能够参考最近几轮的上下文进行回复。</p>
+<hr />
+<h2 id="_1">本章小结</h2>
+<ul>
+<li><strong>KV Cache 机制</strong>：通过在显存中预先分配张量，缓存历史 Token 的键（Key）和值（Value），将自回归生成 Decode 阶段的计算复杂度从 $O(T^2)$ 降低至 $O(T)$，是推理加速的核心基石。</li>
+<li><strong>采样与温度</strong>：温度 $T$ 调节 Logits 的分布平缓度，公式为 $P(x_i) = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}$。Top-p 核采样通过动态截断长尾概率，在保证连贯性的同时维持生成的多样性。</li>
+<li><strong>工具调用状态机</strong>：工具调用并非魔法，而是由 <code>&lt;|tool_call|&gt;</code> 和 <code>&lt;|tool_result|&gt;</code> 等特殊 Token 驱动的有限状态机。Engine 需要在特定状态下暂停生成、解析 JSON、执行本地逻辑并注入结果。</li>
+<li><strong>系统工程边界</strong>：推理系统是模型权重的最终消费者。流式解码处理字节截断，SSE 解决网络长连接，保留头部的滑动窗口解决长对话 OOM。所有这些工程细节的输入格式，必须与 SFT 数据准备阶段的模板保持绝对对齐。</li>
+</ul>
+<hr />
+<h2 id="_2">练习题</h2>
+<p><strong>基础题</strong></p>
+<ol>
+<li>
+<p><strong>KV Cache 原理与 Query</strong>：在自回归生成的 Decode 阶段，为什么我们只需要缓存 Key 和 Value，而绝对不需要缓存 Query？
+   <em>Hint：仔细思考当前步（第 $t$ 步）的 Query 是由什么计算得出的，以及它在注意力公式中需要与哪些张量进行点积。历史的 Query 还会被用到吗？</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   当前步（第 $t$ 步）的 Query 仅由当前输入的单个 Token 计算得出。在注意力机制中，当前 Token 的 Query 需要与当前及所有历史 Token 的 Key 进行点积计算注意力权重，然后再与对应的 Value 进行加权求和。历史 Token（如第 $t-1$ 步）的 Query 只在它们被生成的那个时刻用于计算自身的注意力，对后续 Token 的生成没有任何作用。因此，Query 是即用即弃的，完全不需要缓存，缓存了也是浪费显存。
+   </details></p>
+</li>
+<li>
+<p><strong>温度参数的极端情况分析</strong>：当采样温度 $T \to \infty$ 时，模型的输出概率分布会变成什么样？从直觉上看，这会导致模型在交互时表现出什么现象？
+   <em>Hint：观察公式 $P(x_i) = \frac{\exp(z_i / T)}{\sum \exp(z_j / T)}$ 中指数部分在 $T \to \infty$ 时的极限值。</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   当 $T \to \infty$ 时，对于任意有限的 Logit 值 $z\_i$，$z\_i / T$ 都会趋近于 0。因此，分子 $\exp(z\_i / T)$ 趋近于 $\exp(0) = 1$。由于词表中有 $|V|$ 个 Token，每个 Token 的概率都会趋近于 $1 / |V|$。此时，模型的输出概率分布变成了一个完全均匀的分布。
+   在交互时，这会导致模型完全随机地从词表中抽取 Token，无视任何上下文和语法规则，输出毫无逻辑、不可读的乱码。
+   </details></p>
+</li>
+<li>
+<p><strong>对话模板的对齐灾难</strong>：如果在 SFT 数据准备阶段，人类用户的输入被包裹在 <code>&lt;|user|&gt;</code> 和 <code>&lt;|end|&gt;</code> 之间，但在 CLI 推理时，开发者忘记在用户输入的末尾添加 <code>&lt;|end|&gt;</code>，模型最有可能出现什么行为？
+   <em>Hint：模型在训练时学到的序列模式（Pattern）被打破了。模型会试图如何“修复”这个未闭合的序列？</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   模型会感到极度困惑，因为它在训练数据中从未见过没有闭合标签的序列。由于缺乏触发角色切换的 `&lt;|end|&gt;` 标志，最常见的行为是：模型会顺着用户的语气，继续补全用户的问题（即模型开始扮演用户，自己问自己问题），或者模型会自己生成一个 `&lt;|end|&gt;` 标签然后停止，而不是切换到助手角色（如 `&lt;|assistant|&gt;`）开始回答问题。这会导致交互完全失效。
+   </details></p>
+</li>
+<li>
+<p><strong>Web UI 中的流式输出（Streaming）</strong>：在 Web 界面中实现打字机效果时，为什么通常使用 Server-Sent Events (SSE) 或 WebSocket，而不是普通的 HTTP 短轮询（Short Polling）？
+   <em>Hint：考虑大语言模型自回归生成的频率，以及每次 HTTP 握手的网络开销和延迟。</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   大语言模型生成 Token 的速度非常快（通常每秒几十到上百个 Token）。如果使用普通的 HTTP 短轮询，客户端需要每隔几十毫秒就发起一次完整的 HTTP 请求来询问是否有新 Token。这会产生海量的 TCP 握手/挥手开销、HTTP 头部冗余，并带来极高的网络延迟，导致打字机效果严重卡顿且极大地浪费服务器资源。
+   SSE 允许服务器在一个单向的长连接中，通过 `chunked` 编码持续向客户端推送数据流。连接只建立一次，后续的每个 Token 只是数据流中的一个轻量级事件，延迟极低且资源消耗极少，非常适合逐个 Token 吐出的自回归生成场景。
+   </details></p>
+</li>
+</ol>
+<p><strong>挑战题</strong></p>
+<ol start="5">
+<li>
+<p><strong>KV Cache 的显存占用严格估算</strong>：假设一个 nanochat 模型有 $L$ 层，隐藏层维度为 $D$，使用多头注意力（没有使用 MQA 或 GQA），批大小为 $B$，序列长度为 $T$。请推导存储整个 KV Cache 所需的浮点数元素总数公式。如果模型参数为 $L=24, D=2048$，序列长度 $T=4096$，批大小 $B=1$，数据类型为 FP16（2 字节），请计算 KV Cache 占用的具体显存大小（以 MB 为单位）。
+   <em>Hint：每一层都需要保存 K 和 V 张量。注意张量的维度。1 MB = 1024 * 1024 Bytes。</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   **公式推导**：
+   对于每一层，Key 和 Value 的形状均为 `(Batch, Seq_Len, Hidden_Dim)`，即 $(B, T, D)$。
+   因为有 K 和 V 两个张量，所以单层需要 $2 \times B \times T \times D$ 个元素。
+   总共有 $L$ 层，因此总元素数为 $2 \times B \times T \times D \times L$。
+
+   **具体计算**：
+   元素总数 = $2 \times 1 \times 4096 \times 2048 \times 24 = 402,653,184$ 个元素。
+   因为使用 FP16，每个元素占 2 字节，总字节数 = $402,653,184 \times 2 = 805,306,368$ Bytes。
+   转换为 MB：$805,306,368 / (1024 \times 1024) = 768$ MB。
+   （结论：即使是单并发，4K 上下文的 KV Cache 也会吃掉近 1GB 的显存，这解释了为什么长文本推理显存压力巨大。）
+   </details></p>
+</li>
+<li>
+<p><strong>工具调用的状态机死循环</strong>：在测试工具调用功能时，开发者发现模型不断输出 <code>&lt;|tool_call|&gt;</code>，即使外部工具已经成功执行并返回了明确的结果。请从“数据格式对齐”和“模型能力泛化”两个角度，深入分析可能导致这种状态机死循环的原因。
+   <em>Hint：当 Engine 注入结果时，模型是否能认出这是结果？训练数据中是否教过模型“拿到结果后该干什么”？</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   **角度一：数据格式对齐失败**。Engine 在将工具执行结果追加到上下文时，没有严格按照 SFT 训练时的格式添加标识符（例如漏掉了 `&lt;|tool_result|&gt;` 前缀，或者漏掉了闭合的 `&lt;|im_end|&gt;`）。模型看到一堆莫名其妙的 JSON 字符串，无法识别这是工具的返回结果，以为工具调用失败了或者还没调用，于是再次输出 `&lt;|tool_call|&gt;` 试图重新调用。
+   **角度二：模型能力泛化不足（数据分布缺陷）**。在 SFT 训练数据中，可能只提供了大量“用户提问 -&gt; 模型调用工具”的正向样本，但严重缺乏“模型调用工具 -&gt; 观察到结果 -&gt; 停止调用并用自然语言总结”的完整轨迹。模型过度拟合了“遇到问题就生成 `&lt;|tool_call|&gt;`”这一动作，而没有学会“何时该停止调用”。
+   </details></p>
+</li>
+<li>
+<p><strong>Top-p 采样的数值演算</strong>：假设在某一步生成时，词表只有 5 个 Token (A, B, C, D, E)，经过 Softmax 后的概率分布为：$P(A)=0.5, P(B)=0.3, P(C)=0.1, P(D)=0.07, P(E)=0.03$。如果设置 Top-p 阈值 $p=0.85$，请详细写出演算过程，说明最终哪些 Token 会被保留，哪些会被截断，以及保留下来的 Token 重新归一化后的概率分别是多少？
+   <em>Hint：先按概率降序排列，然后逐个累加，直到累加和首次大于等于 $p$。</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   **第一步：降序排列**。已经是降序：A(0.5), B(0.3), C(0.1), D(0.07), E(0.03)。
+   **第二步：累加概率寻找截断点**。
+
+   - 包含 A：累加和 = 0.5。0.5 &lt; 0.85，继续。
+   - 包含 B：累加和 = 0.5 + 0.3 = 0.8。0.8 &lt; 0.85，继续。
+   - 包含 C：累加和 = 0.8 + 0.1 = 0.9。0.9 &gt;= 0.85，达到阈值，停止。
+   因此，保留的 Token 集合为 {A, B, C}，截断丢弃 {D, E}。
+   **第三步：重新归一化**。
+   保留集合的概率总和为 0.9。
+
+   - 新 $P(A) = 0.5 / 0.9 \approx 0.555$
+   - 新 $P(B) = 0.3 / 0.9 \approx 0.333$
+   - 新 $P(C) = 0.1 / 0.9 \approx 0.111$
+   </details></p>
+</li>
+<li>
+<p><strong>批处理生成（Batch Generation）的 Padding 对齐问题</strong>：在服务端（如 Web API）同时处理多个用户的并发请求时，需要将不同长度的 Prompt 组成一个 Batch 张量送入模型。为了对齐张量形状，必须使用填充符（Pad Token）。在自回归推理时，应该使用 Left Padding（左侧填充）还是 Right Padding（右侧填充）？请从自回归预测的机制详细解释原因。
+   <em>Hint：思考自回归生成的下一步预测依赖于输入序列的哪个特定位置的特征？</em>
+   <details markdown="block">
+   
+
+<summary>点击查看答案</summary>
+
+   **必须使用 Left Padding（左侧填充）**。
+   原因：自回归生成的本质是基于序列的“最后一个有效 Token”来预测下一个 Token。模型在提取特征时，通常会取序列最后一个位置的 Logits 作为下一步的输出。
+   如果使用 Right Padding，不同长度的请求其真实的最后一个 Token 会被填充符（Pad Token）隔开。例如，序列 A 长度为 5，序列 B 长度为 3，如果用 Right Padding 对齐到长度 5，序列 B 的末尾两个位置就是 Pad Token。模型在取最后一个位置（位置 5）的特征时，对于序列 B 取到的是 Pad Token 的无意义特征，从而产生完全错误的输出。
+   通过 Left Padding，所有序列的填充符都在最左侧，所有序列的最后一个真实 Token 都能完美对齐在张量的最右侧（即索引 -1 的位置），模型统一取索引 -1 的特征即可正确预测下一个 Token。
+   </details></p>
+</li>
+</ol>
+<hr />
+<h2 id="gotchas">常见陷阱与错误 (Gotchas)</h2>
+<p>在将模型投入实际交互时，以下是数据准备人员和推理工程师最常遇到的几个深水区坑位。这些问题往往不会直接抛出 Python 异常，而是表现为模型变笨、变慢或行为诡异。</p>
+<ul>
+<li><strong>陷阱 1：KV Cache 导致的隐性 OOM（显存溢出）</strong></li>
+<li><strong>症状</strong>：模型在刚启动时聊天非常流畅，但在多轮对话聊了十几轮（或输入了一篇长文章）后，突然抛出 CUDA Out of Memory 错误并崩溃。</li>
+<li><strong>根因</strong>：Engine 初始化时没有设置硬性的最大上下文限制（Max Length），或者没有实现滑动窗口截断机制。随着对话进行，KV Cache 张量在 Decode 阶段不断被 <code>torch.cat</code> 追加，体积无限线性增长，最终撑爆显存。</li>
+<li>
+<p><strong>调试技巧与修复</strong>：在 Engine 的入口处强制断言 <code>seq_len &lt; max_position_embeddings</code>。使用 <code>nvidia-smi</code> 监控显存随生成步数的线性增长曲线。实现 10.4.3 节描述的“保留头部的滑动窗口策略”，当上下文达到阈值（如 80% 显存容量）时主动丢弃早期对话。</p>
+</li>
+<li>
+<p><strong>陷阱 2：Tokenizer 编解码的不对称（Token Leakage）</strong></p>
+</li>
+<li><strong>症状</strong>：在 CLI 中与模型对话时，看到模型直接将 <code>&lt;|im_start|&gt;</code>、<code>&lt;|tool_call|&gt;</code> 或 <code>&lt;|endoftext|&gt;</code> 等字面字符串打印在了屏幕上，而不是触发相应的内部逻辑（如换行、调用工具或停止生成）。</li>
+<li><strong>根因</strong>：Tokenizer 配置错误。通常是因为在 Decode 时没有配置 <code>skip_special_tokens=True</code>，或者在底层 Engine 中，判断生成结束的条件没有包含这些特殊 Token 的 ID。更严重的是，有时 Encode 时没有将这些字符串注册为 Special Tokens，导致它们被拆分成了多个普通的文本 Token（例如 <code>&lt;</code>、<code>|</code>、<code>im</code>、<code>_</code> 等），模型根本不知道这是一个控制指令。</li>
+<li>
+<p><strong>经验法则</strong>：永远在投入 Engine 前，单独编写一个小脚本测试 Tokenizer 的 <code>encode</code> 和 <code>decode</code> 方法。确保特殊 Token 被正确映射为<em>单个</em>独立的 ID，并且在 Decode 时能够被正确捕获或隐藏。</p>
+</li>
+<li>
+<p><strong>陷阱 3：工具调用的 JSON 解析雪崩</strong></p>
+</li>
+<li><strong>症状</strong>：模型正确输出了 <code>&lt;|tool_call|&gt;</code>，但随后 Engine 抛出 <code>json.decoder.JSONDecodeError</code> 异常，整个推理服务直接崩溃退出。</li>
+<li><strong>根因</strong>：大语言模型本质上是概率模型，无法保证 100% 输出符合严格语法的 JSON。它偶尔会漏掉一个闭合引号，或者在 JSON 块中间加入非法的换行符。如果 Engine 的解析逻辑过于脆弱（直接调用 <code>json.loads</code>），就会导致系统雪崩。</li>
+<li>
+<p><strong>调试技巧与修复</strong>：在状态机的解析节点加入坚固的 <code>try-except</code> 块。<strong>永远不要因为模型输出格式错误而崩溃服务端</strong>。如果解析失败，应该将错误信息（例如：“JSON 格式错误，缺少闭合括号，请修正后重试”）包装成 <code>&lt;|tool_result|&gt;</code> 喂回给模型。现代微调过的模型通常具备强大的自纠错（Self-Correction）能力，能够在下一轮中输出正确的 JSON。</p>
+</li>
+<li>
+<p><strong>陷阱 4：Train-Inference 格式不匹配（分布偏移的终极杀手）</strong></p>
+</li>
+<li><strong>症状</strong>：模型在 SFT 阶段的 Loss 降得很低，评测指标也很好，但在实际 CLI 聊天时，表现得像个智障，答非所问，或者频繁出现重复生成。</li>
+<li><strong>根因</strong>：这是最常见的性能灾难。SFT 训练时，数据准备脚本在 Prompt 结尾（例如 <code>&lt;|im_start|&gt;assistant</code> 后面）带有一个换行符或空格，而推理代码 <code>chat_cli.py</code> 在拼接字符串时漏掉了这个空格。这种微小的字节级分布偏移（Distribution Shift）会让模型进入一个它从未见过的隐状态空间，导致生成质量断崖式下降。</li>
+<li>
+<p><strong>经验法则</strong>：不要相信你的眼睛，相信代码的输出。将 SFT 数据集中的一条样本（Decode 成纯文本）打印到文件 <code>train_sample.txt</code>，将推理引擎实际送入模型的纯文本打印到文件 <code>infer_sample.txt</code>。使用 Linux 命令 <code>diff -u train_sample.txt infer_sample.txt</code> 或 <code>hexdump</code> 对比，确保两者在进入模型前的最后一个字节是绝对一致的。</p>
+</li>
+<li>
+<p><strong>陷阱 5：EOS Token 被忽略导致无限生成</strong></p>
+</li>
+<li><strong>症状</strong>：模型正确回答了用户的问题，但回答完之后不停止，而是继续自言自语，甚至开始生成乱码，直到达到 <code>max_new_tokens</code> 限制才停下。</li>
+<li><strong>根因</strong>：模型在训练时学习到在回答结束时输出特定的 EOS（End of Sequence）Token，但在推理引擎的生成循环中，没有正确设置 <code>stop_token_ids</code>。Engine 没认出这个 Token 是停止信号，继续强制模型往下生成。</li>
+<li><strong>修复方法</strong>：检查 Engine 的 <code>generate</code> 函数，确保 <code>while</code> 循环的终止条件中包含了所有可能的停止 Token ID（例如 <code>tokenizer.eos_token_id</code>，以及 ChatML 格式中的 <code>&lt;|im_end|&gt;</code> 的 ID）。一旦生成的 Token ID 命中该列表，立即 <code>break</code> 退出循环。</li>
+</ul>
+            </article>
+            
+            <nav class="page-nav"><a href="chapter9.html" class="nav-link prev">← 第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</a><a href="chapter11.html" class="nav-link next">第 11 章：实验体系（miniseries与scaling laws） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>nanochat</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="nanochat">nanochat</h1>
+<p><img alt="nanochat logo" src="dev/nanochat.png" />
+<img alt="scaling laws" src="dev/scaling_laws_jan26.png" /></p>
+<p>nanochat is the simplest experimental harness for training LLMs. It is designed to run on a single GPU node, the code is minimal/hackable, and it covers all major LLM stages including tokenization, pretraining, finetuning, evaluation, inference, and a chat UI. For example, you can train your own GPT-2 capability LLM (which cost ~$43,000 to train in 2019) for only $72 (~3 hours of 8XH100 GPU node) and then talk to it in a familiar ChatGPT-like web UI. On a spot instance, the total cost can be closer to ~$20. More generally, nanochat is configured out of the box to train an entire miniseries of compute-optimal models by setting one single complexity dial: <code>--depth</code>, the number of layers in the GPT transformer model (GPT-2 capability happens to be approximately depth 26). All other hyperparameters (the width of the transformer, number of heads, learning rate adjustments, training horizons, weight decays, ...) are calculated automatically in an optimal way.</p>
+<p>For questions about the repo, I recommend either using <a href="https://deepwiki.com/karpathy/nanochat">DeepWiki</a> from Devin/Cognition to ask questions about the repo, or use the <a href="https://github.com/karpathy/nanochat/discussions">Discussions tab</a>, or come by the <a href="https://discord.com/channels/1020383067459821711/1427295580895314031">#nanochat</a> channel on Discord.</p>
+<h2 id="time-to-gpt-2-leaderboard">Time-to-GPT-2 Leaderboard</h2>
+<p>Presently, the main focus of development is on tuning the pretraining stage, which takes the most amount of compute. Inspired by the modded-nanogpt repo and to incentivise progress and community collaboration, nanochat maintains a leaderboard for a "GPT-2 speedrun", which is the wall-clock time required to train a nanochat model to GPT-2 grade capability, as measured by the DCLM CORE score. The <a href="runs/speedrun.sh">runs/speedrun.sh</a> script always reflects the reference way to train GPT-2 grade model and talk to it. The current leaderboard looks as follows:</p>
+<p>| # | time | val_bpb | CORE | Description | Date | Commit | Contributors |</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>time</th>
+<th>val_bpb</th>
+<th>CORE</th>
+<th>Description</th>
+<th>Date</th>
+<th>Commit</th>
+<th>Contributors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>168 hours</td>
+<td>-</td>
+<td>0.2565</td>
+<td>Original OpenAI GPT-2 checkpoint</td>
+<td>2019</td>
+<td>-</td>
+<td>OpenAI</td>
+</tr>
+<tr>
+<td>1</td>
+<td>3.04</td>
+<td>0.74833</td>
+<td>0.2585</td>
+<td>d24 baseline, slightly overtrained</td>
+<td>Jan 29 2026</td>
+<td>348fbb3</td>
+<td>@karpathy</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2.91</td>
+<td>0.74504</td>
+<td>0.2578</td>
+<td>d26 slightly undertrained <strong>+fp8</strong></td>
+<td>Feb 2 2026</td>
+<td>a67eba3</td>
+<td>@karpathy</td>
+</tr>
+<tr>
+<td>3</td>
+<td>2.76</td>
+<td>0.74645</td>
+<td>0.2602</td>
+<td>bump total batch size to 1M tokens</td>
+<td>Feb 5 2026</td>
+<td>2c062aa</td>
+<td>@karpathy</td>
+</tr>
+</tbody>
+</table>
+<p>The primary metric we care about is "time to GPT-2" - the wall clock time needed to outperform the GPT-2 (1.6B) CORE metric on an 8XH100 GPU node. The GPT-2 CORE score is 0.256525. In 2019, the training of GPT-2 cost approximately $43,000 so it is incredible that due to many advances over 7 years across the stack, we can now do so much faster and for well below $100 (e.g. at the current ~$3/GPU/hr, an 8XH100 node is ~$24/hr, so 3 hours is ~$72).</p>
+<p>See <a href="dev/LEADERBOARD.html">dev/LEADERBOARD.md</a> for more docs on how to interpret and contribute to the leaderboard.</p>
+<h2 id="getting-started">Getting started</h2>
+<h3 id="reproduce-and-talk-to-gpt-2">Reproduce and talk to GPT-2</h3>
+<p>The most fun you can have is to train your own GPT-2 and talk to it. The entire pipeline to do so is contained in the single file <a href="runs/speedrun.sh">runs/speedrun.sh</a>, which is designed to be run on an 8XH100 GPU node. Boot up a new 8XH100 GPU box from your favorite provider (e.g. I use and like <a href="https://lambda.ai/service/gpu-cloud">Lambda</a>), and kick off the training script:</p>
+<div class="codehilite"><pre><span></span><code>bash<span class="w"> </span>runs/speedrun.sh
+</code></pre></div>
+
+<p>You may wish to do so in a screen session as this will take ~3 hours to run. Once it's done, you can talk to it via the ChatGPT-like web UI. Make sure again that your local uv virtual environment is active (run <code>source .venv/bin/activate</code>), and serve it:</p>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>scripts.chat_web
+</code></pre></div>
+
+<p>And then visit the URL shown. Make sure to access it correctly, e.g. on Lambda use the public IP of the node you're on, followed by the port, so for example <a href="http://209.20.xxx.xxx:8000/">http://209.20.xxx.xxx:8000/</a>, etc. Then talk to your LLM as you'd normally talk to ChatGPT! Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :).</p>
+<hr />
+<p><img width="2672" height="1520" alt="image" src="https://github.com/user-attachments/assets/ed39ddf8-2370-437a-bedc-0f39781e76b5" /></p>
+<hr />
+<p>A few more notes:</p>
+<ul>
+<li>The code will run just fine on the Ampere 8XA100 GPU node as well, but a bit slower.</li>
+<li>All code will run just fine on even a single GPU by omitting <code>torchrun</code>, and will produce ~identical results (code will automatically switch to gradient accumulation), but you'll have to wait 8 times longer.</li>
+<li>If your GPU(s) have less than 80GB, you'll have to tune some of the hyperparameters or you will OOM / run out of VRAM. Look for <code>--device_batch_size</code> in the scripts and reduce it until things fit. E.g. from 32 (default) to 16, 8, 4, 2, or even 1. Less than that you'll have to know a bit more what you're doing and get more creative.</li>
+<li>Most of the code is fairly vanilla PyTorch so it should run on anything that supports that - xpu, mps, or etc, but I haven't personally exercised all of these code paths so there might be sharp edges.</li>
+</ul>
+<h2 id="research">Research</h2>
+<p>If you are a researcher and wish to help improve nanochat, two scripts of interest are <a href="runs/scaling_laws.sh">runs/scaling_laws.sh</a> and <a href="runs/miniseries.sh">runs/miniseries.sh</a>. See <a href="https://github.com/karpathy/nanochat/discussions/420">Jan 7 miniseries v1</a> for related documentation. For quick experimentation (~5 min pretraining runs) my favorite scale is to train a 12-layer model (GPT-1 sized), e.g. like this:</p>
+<div class="codehilite"><pre><span></span><code>OMP_NUM_THREADS=1 torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- \
+    --depth=12 \
+    --run=&quot;d12&quot; \
+    --model-tag=&quot;d12&quot; \
+    --core-metric-every=999999 \
+    --sample-every=-1 \
+    --save-every=-1 \
+</code></pre></div>
+
+<p>This uses wandb (run name "d12"), only runs the CORE metric on last step, and it doesn't sample and save intermediate checkpoints. I like to change something in the code, re-run a d12 (or a d16 etc) and see if it helped, in an iteration loop. To see if a run helps, I like to monitor the wandb plots for:</p>
+<ol>
+<li><code>val_bpb</code> (validation loss in vocab-size-invariant units of bits per byte) as a function of <code>step</code>, <code>total_training_time</code> and <code>total_training_flops</code>.</li>
+<li><code>core_metric</code> (the DCLM CORE socre)</li>
+<li>VRAM utilization, <code>train/mfu</code> (Model FLOPS utilization), <code>train/tok_per_sec</code> (training throughput)</li>
+</ol>
+<p>See an example <a href="https://github.com/karpathy/nanochat/pull/498#issuecomment-3850720044">here</a>.</p>
+<p>The important thing to note is that nanochat is written and configured around one single dial of complexity - the depth of the transformer. This single integer automatically determines all other hyperparameters (the width of the transformer, number of heads, learning rate adjustments, training horizons, weight decays, ...) so that the trained model comes out compute optimal. The idea is that the user doesn't have to think about or set any of this, they are simply asking for a smaller or bigger model using <code>--depth</code>, and everything "just works". By sweeping out the depth, you achieve the nanochat miniseries of compute optimal models at various sizes. GPT-2 capability model (which is of most interest at the moment) happens to be somewhere around d24-d26 range with the current code. But any candidate changes to the repo have to be principled enough that they work for all settings of depth.</p>
+<h2 id="running-on-cpu-mps">Running on CPU / MPS</h2>
+<p>The script <a href="runs/runcpu.sh">runs/runcpu.sh</a> shows a very simple example of running on CPU or Apple Silicon. It dramatically shrinks the LLM that is being trained to make things fit into a reasonable time interval of a few ten minutes of training. You will not get strong results in this way.</p>
+<h2 id="guides">Guides</h2>
+<p>I've published a number of guides that might contain helpful information, most recent to least recent:</p>
+<ul>
+<li><a href="https://github.com/karpathy/nanochat/discussions/481">Feb 1 2026: Beating GPT-2 for &lt;&lt;$100: the nanochat journey</a></li>
+<li><a href="https://github.com/karpathy/nanochat/discussions/420">Jan 7 miniseries v1</a> documents the first nanochat miniseries of models.</li>
+<li>To add new abilities to nanochat, see <a href="https://github.com/karpathy/nanochat/discussions/164">Guide: counting r in strawberry (and how to add abilities generally)</a>.</li>
+<li>To customize your nanochat, see <a href="https://github.com/karpathy/nanochat/discussions/139">Guide: infusing identity to your nanochat</a> in Discussions, which describes how you can tune your nanochat's personality through synthetic data generation and mixing that data into the SFT stage.</li>
+<li><a href="https://github.com/karpathy/nanochat/discussions/1">Oct 13 2025: original nanochat post</a> introducing nanochat, though now it contains some deprecated information and the model is a lot older (with worse results) than current master.</li>
+</ul>
+<h2 id="file-structure">File structure</h2>
+<div class="codehilite"><pre><span></span><code><span class="o">.</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">LICENSE</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">README</span><span class="o">.</span><span class="n">md</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">dev</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">gen_synthetic_data</span><span class="o">.</span><span class="n">py</span><span class="w">       </span><span class="c1"># Example synthetic data for identity</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">generate_logo</span><span class="o">.</span><span class="n">html</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">nanochat</span><span class="o">.</span><span class="n">png</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">repackage_data_reference</span><span class="o">.</span><span class="n">py</span><span class="w"> </span><span class="c1"># Pretraining data shard generation</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">nanochat</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">__init__</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># empty</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">checkpoint_manager</span><span class="o">.</span><span class="n">py</span><span class="w">       </span><span class="c1"># Save/Load model checkpoints</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">common</span><span class="o">.</span><span class="n">py</span><span class="w">                   </span><span class="c1"># Misc small utilities, quality of life</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">core_eval</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Evaluates base model CORE score (DCLM paper)</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">dataloader</span><span class="o">.</span><span class="n">py</span><span class="w">               </span><span class="c1"># Tokenizing Distributed Data Loader</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">dataset</span><span class="o">.</span><span class="n">py</span><span class="w">                  </span><span class="c1"># Download/read utils for pretraining data</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">engine</span><span class="o">.</span><span class="n">py</span><span class="w">                   </span><span class="c1"># Efficient model inference with KV Cache</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">execution</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Allows the LLM to execute Python code as tool</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">gpt</span><span class="o">.</span><span class="n">py</span><span class="w">                      </span><span class="c1"># The GPT nn.Module Transformer</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">logo</span><span class="o">.</span><span class="n">svg</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">loss_eval</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Evaluate bits per byte (instead of loss)</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">optim</span><span class="o">.</span><span class="n">py</span><span class="w">                    </span><span class="c1"># AdamW + Muon optimizer, 1GPU and distributed</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">report</span><span class="o">.</span><span class="n">py</span><span class="w">                   </span><span class="c1"># Utilities for writing the nanochat Report</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">tokenizer</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># BPE Tokenizer wrapper in style of GPT-4</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">ui</span><span class="o">.</span><span class="n">html</span><span class="w">                     </span><span class="c1"># HTML/CSS/JS for nanochat frontend</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">pyproject</span><span class="o">.</span><span class="n">toml</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">runs</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">miniseries</span><span class="o">.</span><span class="n">sh</span><span class="w">               </span><span class="c1"># Miniseries training script</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">runcpu</span><span class="o">.</span><span class="n">sh</span><span class="w">                   </span><span class="c1"># Small example of how to run on CPU/MPS</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">scaling_laws</span><span class="o">.</span><span class="n">sh</span><span class="w">             </span><span class="c1"># Scaling laws experiments</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">speedrun</span><span class="o">.</span><span class="n">sh</span><span class="w">                 </span><span class="c1"># Train the ~$100 nanochat d20</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">scripts</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">base_eval</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Base model: CORE score, bits per byte, samples</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">base_train</span><span class="o">.</span><span class="n">py</span><span class="w">               </span><span class="c1"># Base model: train</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">chat_cli</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># Chat model: talk to over CLI</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">chat_eval</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Chat model: eval tasks</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">chat_rl</span><span class="o">.</span><span class="n">py</span><span class="w">                  </span><span class="c1"># Chat model: reinforcement learning</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">chat_sft</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># Chat model: train SFT</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">chat_web</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># Chat model: talk to over WebUI</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">tok_eval</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># Tokenizer: evaluate compression rate</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">tok_train</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Tokenizer: train it</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">tasks</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">arc</span><span class="o">.</span><span class="n">py</span><span class="w">                      </span><span class="c1"># Multiple choice science questions</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">common</span><span class="o">.</span><span class="n">py</span><span class="w">                   </span><span class="c1"># TaskMixture | TaskSequence</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">customjson</span><span class="o">.</span><span class="n">py</span><span class="w">               </span><span class="c1"># Make Task from arbitrary jsonl convos</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">gsm8k</span><span class="o">.</span><span class="n">py</span><span class="w">                    </span><span class="c1"># 8K Grade School Math questions</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">humaneval</span><span class="o">.</span><span class="n">py</span><span class="w">                </span><span class="c1"># Misnomer; Simple Python coding task</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">mmlu</span><span class="o">.</span><span class="n">py</span><span class="w">                     </span><span class="c1"># Multiple choice questions, broad topics</span>
+<span class="err">│</span><span class="w">   </span><span class="err">├──</span><span class="w"> </span><span class="n">smoltalk</span><span class="o">.</span><span class="n">py</span><span class="w">                 </span><span class="c1"># Conglomerate dataset of SmolTalk from HF</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">spellingbee</span><span class="o">.</span><span class="n">py</span><span class="w">              </span><span class="c1"># Task teaching model to spell/count letters</span>
+<span class="err">├──</span><span class="w"> </span><span class="n">tests</span>
+<span class="err">│</span><span class="w">   </span><span class="err">└──</span><span class="w"> </span><span class="n">test_engine</span><span class="o">.</span><span class="n">py</span>
+<span class="err">└──</span><span class="w"> </span><span class="n">uv</span><span class="o">.</span><span class="n">lock</span>
+</code></pre></div>
+
+<h2 id="contributing">Contributing</h2>
+<p>The goal of nanochat is to improve the state of the art in micro models that are accessible to work with end to end on budgets of &lt; $1000 dollars. Accessibility is about overall cost but also about cognitive complexity - nanochat is not an exhaustively configurable LLM "framework"; there are no giant configuration objects, model factories, or if-then-else monsters in the code base. It is a single, cohesive, minimal, readable, hackable, maximally-forkable "strong baseline" codebase designed to run start to end and produce a ChatGPT model you can talk to. Currently, the most interesting part personally is speeding up the latency to GPT-2 (i.e. getting a CORE score above 0.256525). Currently this takes ~3 hours, but by improving the pretraining stage we can improve this further.</p>
+<p>Current AI policy: disclosure. When submitting a PR, please declare any parts that had substantial LLM contribution and that you have not written or that you do not fully understand.</p>
+<h2 id="acknowledgements">Acknowledgements</h2>
+<ul>
+<li>The name (nanochat) derives from my earlier project <a href="https://github.com/karpathy/nanoGPT">nanoGPT</a>, which only covered pretraining.</li>
+<li>nanochat is also inspired by <a href="https://github.com/KellerJordan/modded-nanogpt">modded-nanoGPT</a>, which gamified the nanoGPT repo with clear metrics and a leaderboard, and borrows a lot of its ideas and some implementation for pretraining.</li>
+<li>Thank you to <a href="https://huggingface.co/">HuggingFace</a> for fineweb and smoltalk.</li>
+<li>Thank you <a href="https://lambda.ai/service/gpu-cloud">Lambda</a> for the compute used in developing this project.</li>
+<li>Thank you to chief LLM whisperer 🧙‍♂️ Alec Radford for advice/guidance.</li>
+<li>Thank you to the repo czar Sofie <a href="https://github.com/svlandeg">@svlandeg</a> for help with managing issues, pull requests and discussions of nanochat.</li>
+</ul>
+<h2 id="cite">Cite</h2>
+<p>If you find nanochat helpful in your research cite simply as:</p>
+<div class="codehilite"><pre><span></span><code><span class="nc">@misc</span><span class="p">{</span><span class="nl">nanochat</span><span class="p">,</span>
+<span class="w">  </span><span class="na">author</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Andrej Karpathy}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">title</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{nanochat: The best ChatGPT that \$100 can buy}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">year</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{2025}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">publisher</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{GitHub}</span><span class="p">,</span>
+<span class="w">  </span><span class="na">url</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{https://github.com/karpathy/nanochat}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="license">License</h2>
+<p>MIT</p>
+            </article>
+            
+            <nav class="page-nav"><a href="dev/LOG.html" class="nav-link prev">← Experiment Log</a><a href=".claude/skills/read-arxiv-paper/SKILL.html" class="nav-link next">Untitled →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

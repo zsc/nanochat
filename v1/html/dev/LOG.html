@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="../">
+    <title>Experiment Log</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder expanded" data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="experiment-log">Experiment Log</h1>
+<p>A running summary documenting some experiments and findings. Started ~Jan 7 2026.</p>
+<hr />
+<h2 id="2026-02-19-mixture-of-experts-negative">2026-02-19: Mixture of Experts (negative)</h2>
+<p>Implemented a DeepSeekV3-style Mixture of Experts layer as a drop-in replacement for the dense MLP. The MoE branch works and improves per-step validation loss, but is not a net improvement on wall clock time due to MoE overhead (at least for our scale of interest of approx GPT-2 capability).</p>
+<h3 id="implementation">Implementation</h3>
+<p>Follows DeepSeekV3 and using torchtitan as reference:</p>
+<ul>
+<li><strong>8 routed experts, top-2 routing</strong> with sigmoid gating (not softmax)</li>
+<li><strong>1 shared expert</strong> (dense MLP processing all tokens, following DeepSeekV3)</li>
+<li><strong>Auxiliary-loss-free load balancing</strong> (DeepSeekV3's expert bias nudging)</li>
+<li><strong>Iso-FLOP sizing</strong>: <code>expert_hidden_dim = round(4 * dim / (top_k + num_shared) / 128) * 128</code>, so active FLOPs per token match the dense MLP</li>
+<li><strong><code>torch._grouped_mm</code></strong> for dispatching tokens to experts in a single kernel (instead of a Python for-loop)</li>
+<li><strong>3D expert weight tensors</strong> <code>(num_experts, hidden, dim)</code> — Muon's Polar Express operates on the last two dims, so each expert is independently orthogonalized</li>
+<li><strong>Active parameter counting</strong> for scaling laws (only <code>top_k + shared</code> experts, not all 8)</li>
+</ul>
+<h3 id="what-was-easy">What was easy</h3>
+<ul>
+<li>The core MoE forward pass: router, sort tokens by expert, grouped matmul, scatter back. Conceptually clean.</li>
+<li>Shared expert: just an <code>nn.Linear</code> MLP that runs on all tokens alongside the routed path.</li>
+<li>3D expert params + Muon: only required fixing <code>second_momentum_buffer</code> shape to preserve leading dims.</li>
+<li>Load balancing: DeepSeekV3's bias nudging is simple and effective (~10 lines).</li>
+</ul>
+<h3 id="what-was-hard-ugly">What was hard / ugly</h3>
+<ul>
+<li><strong><code>torch._grouped_mm</code> quirks</strong>: requires bf16 (not fp32), column-major right operand, int32 cumulative offsets. The API is undocumented and only discoverable by trial and error.</li>
+<li><strong>Token count padding</strong>: torchtitan pads each expert's token count to alignment multiples (8 for bf16) for better grouped_mm throughput. We implemented this with both a pure PyTorch approach and a copy of torchtitan's Triton kernel. Both compiled cleanly (0 graph breaks), but with ~65K tokens across 8 experts, each expert already gets ~8K tokens which is well-aligned. The padding overhead (gather/scatter) actually regressed MFU from 35% to 33%. Reverted.</li>
+<li><strong>FP8 + MoE</strong>: <code>torch._grouped_mm</code> does NOT support FP8. There's a separate <code>torch._scaled_grouped_mm</code> API that requires per-row scaling (not per-tensor like our <code>Float8Linear</code>). The backward pass for weight gradients needs per-group column-wise scaling, which torchao implements with custom Triton kernels. We investigated thoroughly (see <code>dev/moe_fp8.md</code>) but did not implement — would require either depending on <code>torchao.prototype</code> (unstable) or writing ~200 lines of custom autograd + quantization code. Partial FP8 support exists: the shared expert's <code>nn.Linear</code> layers do get converted, but the routed experts (3D <code>nn.Parameter</code>) stay in bf16.</li>
+</ul>
+<h3 id="results">Results</h3>
+<ul>
+<li>d18: MFU dropped from ~46% to ~35% (the grouped_mm dispatch + token sorting overhead is significant)</li>
+<li>Per-step improvement in validation loss does not compensate for the throughput hit</li>
+<li>Net negative on wall clock time</li>
+</ul>
+<h3 id="what-remains-if-revisited">What remains (if revisited)</h3>
+<ul>
+<li><strong>FP8 for routed experts</strong>: Use <code>torch._scaled_grouped_mm</code> with a custom <code>_Float8GroupedMatmul</code> autograd function, with bf16 fallback for weight gradient (avoiding the per-group column-wise Triton kernels).</li>
+</ul>
+<p>What's really needed is a fused "FlashMoE" kernel that handles routing + expert dispatch + matmul in one shot (like FlashAttention did for attention), with all the needed features. This doesn't exist yet. Rawdogging MoE with current PyTorch primitives is painful — lots of sorting, gathering, scattering, and layout wrangling around the actual compute.</p>
+<h3 id="verdict">Verdict</h3>
+<p>MoE is not worth the trouble for nanochat right now. The code bloat is substantial (moe.py, router, shared expert, load balancing, optimizer fixes, FP8 gaps, active param counting) and the performance is worse wall-clock at our scale of interest. The fundamental issue is that the grouped_mm dispatch overhead eats the FLOP savings from sparsity, at least at our model scales and sequence lengths.</p>
+<hr />
+<h2 id="2026-02-17-pretraining-data-fineweb-negative">2026-02-17: Pretraining Data: FineWeb (negative)</h2>
+<p>Tried vanilla fineweb instead of fineweb-edu dataset. Significantly, shockingly worse results:</p>
+<ul>
+<li>d26 (GPT-2): CORE 0.2602 → 0.2241</li>
+</ul>
+<p>This is the fifth failed attempt to beat pure FineWeb-EDU on CORE score.</p>
+<hr />
+<h2 id="2026-02-17-pretraining-data-mixture-experiment-negative">2026-02-17: Pretraining Data Mixture Experiment (negative)</h2>
+<p>Tried <a href="https://huggingface.co/datasets/hynky/finepdfs_50BT-dclm_30BT-fineweb_edu_20BT">hynky/finepdfs_50BT-dclm_30BT-fineweb_edu_20BT</a>, a mixture of FinePDFs, DCLM, and FineWeb-EDU. Slightly worse on both model sizes tested:</p>
+<ul>
+<li>d26 (GPT-2): CORE 0.2602 → 0.2549</li>
+<li>d18: CORE 0.199 → 0.192</li>
+</ul>
+<p>This is the fourth failed attempt to beat pure FineWeb-EDU on CORE score.</p>
+<hr />
+<h2 id="2026-02-16-sft-script-upgrades">2026-02-16: SFT Script Upgrades</h2>
+<p>Brought <code>chat_sft.py</code> up to parity with <code>base_train.py</code> and tuned settings based on SFT sweeps.</p>
+<p>Tuning:</p>
+<ul>
+<li><strong>Optimizer warm-start</strong> (<code>--load-optimizer=1</code>, default on): loads pretrained momentum buffers via new <code>load_optimizer_state()</code> in <code>checkpoint_manager.py</code>. LRs are reset to fresh SFT values after load. Loading the optimizer works slightly better but not by too much.</li>
+<li><strong>LR schedule</strong>: replaced "constant 80%, linear to 0" with warmup/constant/warmdown matching <code>base_train.py</code> (<code>--warmup-ratio</code>, <code>--warmdown-ratio</code>, <code>--init-lr-frac</code>, <code>--final-lr-frac</code>). Similar to pretraining, warmdown ratio of 0.5 worked the best. <code>--init-lr-frac</code> changed from 1.0 slightly lower to 0.8.</li>
+<li><strong>LR tuning</strong>: attempted to tune all the individual LRs (e.g. does SFT prefer lower LR for embeddings? etc.) but all of this produced negative results.</li>
+<li><strong>Data mixture</strong>: MMLU epochs 1→3, GSM8K epochs 2→4 (confirmed best from sweeps). Epoch counts now configurable via <code>--mmlu-epochs</code> / <code>--gsm8k-epochs</code>. Might remove these in the future though.</li>
+</ul>
+<p>Quality of life, footguns, minor fixes:</p>
+<ul>
+<li><strong>Hyperparameter inheritance</strong>: SFT now inherits batch sizes and LRs from the pretrained checkpoint metadata by default (CLI overrides still work). Also saved <code>total_batch_size</code> to <code>base_train.py</code> checkpoint metadata.</li>
+<li><strong>GC management</strong>: disabled Python GC after step 1 to avoid ~500ms pauses (manual collect every 5000 steps), same as base pretraining.</li>
+<li><strong>ChatCORE eval</strong>: periodic eval during SFT (<code>--chatcore-every=200</code>) across all 6 tasks, logged to wandb.</li>
+<li><strong>MFU</strong>: uses <code>get_peak_flops()</code> for actual GPU instead of hardcoded H100 value.</li>
+<li>Removed <code>--dry-run</code> and <code>--dtype</code> flags. All ranks now participate in checkpoint save.</li>
+</ul>
+<hr />
+<h2 id="2026-02-05-auto-batch-size-scaling">2026-02-05: Auto Batch Size Scaling</h2>
+<h3 id="background">Background</h3>
+<p>So far, the <code>--total-batch-size</code> was hardcoded to be <code>2**19 = 524,288</code> ~= 0.5M tokens. This was the optimal setting for d12, but when I tried to re-tune it for d26 (GPT-2), I noticed that the optimal was closer to <code>2**20 = 1,048,576</code> ~= 1M tokens. This is to be expected - larger models prefer a higher optimal total batch size. However, we have to make sure that all settings of <code>--depth</code> get their own optimal batch size calculated in some principled way. Here, I referenced the "Power Lines" paper from Cerebras (<a href="https://arxiv.org/abs/2505.13738">arXiv:2505.13738</a>) for a lot of related experimentation. In particular, they found that <strong>Bopt ∝ D^0.383</strong> (where D is the number of training tokens, not the number of parameters!). So the idea is to tune the optimal batch size on d12, and then extrapolate it with this power law to bigger models. The 0.383 exponent means batch size grows slowly: 10× more tokens only justifies ~2.4× bigger batch. For nanochat's compute-optimal training (D ∝ N via <code>--target-param-data-ratio</code>), this means deeper models naturally want larger batches.</p>
+<h3 id="implementation_1">Implementation</h3>
+<p>Added <code>--total-batch-size=-1</code> (now the default) to auto-compute optimal batch:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">get_scaling_params</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">m</span><span class="p">:</span> <span class="n">m</span><span class="o">.</span><span class="n">num_scaling_params</span><span class="p">()[</span><span class="s1">&#39;transformer_matrices&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">m</span><span class="o">.</span><span class="n">num_scaling_params</span><span class="p">()[</span><span class="s1">&#39;lm_head&#39;</span><span class="p">]</span>
+<span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">total_batch_size</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+    <span class="n">D_REF</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">target_param_data_ratio</span> <span class="o">*</span> <span class="n">get_scaling_params</span><span class="p">(</span><span class="n">build_model_meta</span><span class="p">(</span><span class="mi">12</span><span class="p">))</span>
+    <span class="n">B_REF</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="mi">19</span>
+    <span class="n">args</span><span class="o">.</span><span class="n">total_batch_size</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">**</span> <span class="nb">round</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="n">B_REF</span> <span class="o">*</span> <span class="p">(</span><span class="n">target_tokens</span> <span class="o">/</span> <span class="n">D_REF</span><span class="p">)</span> <span class="o">**</span> <span class="mf">0.383</span><span class="p">))</span>
+</code></pre></div>
+
+<p>Reference point: d=12 model with B=2^19 (empirically validated). The reference is computed dynamically so that if the architecture changes (e.g., different <code>--aspect-ratio</code>), the math automatically adjusts. However, if the model actually does change too much, one would also want to re-tune the optimal batch size for d=12.</p>
+<h3 id="results_1">Results</h3>
+<p>With this formula, we currently get:</p>
+<p>| Depth | Scaling Params | Target Tokens | Auto Batch |</p>
+<table>
+<thead>
+<tr>
+<th>Depth</th>
+<th>Scaling Params</th>
+<th>Target Tokens</th>
+<th>Auto Batch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>d=8</td>
+<td>42M</td>
+<td>0.44B</td>
+<td>2^18 = 262K</td>
+</tr>
+<tr>
+<td>d=10-16</td>
+<td>70M-235M</td>
+<td>0.7B-2.5B</td>
+<td>2^19 = 524K</td>
+</tr>
+<tr>
+<td>d=18-26</td>
+<td>324M-918M</td>
+<td>3.4B-9.6B</td>
+<td>2^20 = 1.05M</td>
+</tr>
+<tr>
+<td>d=32-50</td>
+<td>1.7B-6.2B</td>
+<td>17.6B-65.6B</td>
+<td>2^21 = 2.1M</td>
+</tr>
+</tbody>
+</table>
+<p>In particular, this matches empirical observations that d26 prefers ~2^20 while d12 prefers ~2^19.</p>
+<h3 id="code-cleanup">Code Cleanup</h3>
+<p>Also refactored model initialization to use <code>build_model_meta(depth)</code> helper and <code>dataclasses.asdict()</code> for cleaner config handling.</p>
+<h3 id="useful-references">Useful references</h3>
+<ul>
+<li><a href="https://arxiv.org/abs/2505.13738">Bergsma et al., Power Laws for Batch Size, Model Size, and Training Horizon</a></li>
+<li><a href="https://arxiv.org/abs/1812.06162">McCandlish et al., An Empirical Model of Large-Batch Training</a></li>
+<li><a href="https://arxiv.org/abs/2005.14165">Brown et al., Language Models are Few-Shot Learners</a></li>
+<li><a href="https://arxiv.org/abs/2505.23971">Merrill et al., The Batch Size–Critical Batch Size Myth</a></li>
+</ul>
+<h3 id="one-more-thing-batch-size-ramp">One more thing (batch size ramp)</h3>
+<p>Tried batch size ramping. The simplest implementation I could think of "tricks" the existing training loop by slicing each micro-batch into smaller pieces and calling optimizer.step() more frequently early in training (1/8 → 1/4 → 1/2 → full batch over the first x% of training, with sqrt LR scaling). Also required a torch.compile warmup phase to pre-compile all slice sizes and avoid recompilation spikes during training. While the idea is sound and small gains were observed, they weren't sufficient to justify the code complexity introduced (conditional slicing logic, warmup with state save/restore, etc.). Not merged for now.</p>
+<hr />
+<h2 id="2026-02-05-swiglu-activation-negative-result">2026-02-05: SwiGLU Activation (Negative Result)</h2>
+<p>Replaced ReLU² MLP activation with SwiGLU (inspired by <a href="https://x.com/_xjdr/status/2019141521690567058">twitter</a>). SwiGLU uses three projections instead of two, so to match parameters and FLOPs we scale hidden_dim from 4× to 8/3×:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Old ReLU²: 2 matrices, 4x expansion</span>
+<span class="c1">#   params: 2 × n × 4n = 8n²</span>
+<span class="c1">#   flops:  2 × 2n × 4n = 16n² per token</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">c_fc</span>   <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">n_embd</span><span class="p">,</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">n_embd</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">c_proj</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">n_embd</span><span class="p">,</span> <span class="n">n_embd</span><span class="p">)</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">c_proj</span><span class="p">(</span><span class="n">relu</span><span class="p">(</span><span class="n">c_fc</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">.</span><span class="n">square</span><span class="p">())</span>
+
+<span class="c1"># New SwiGLU: 3 matrices, 8/3x expansion</span>
+<span class="c1">#   params: 2 × n × (8n/3) + (8n/3) × n = 8n²  ✓ matches</span>
+<span class="c1">#   flops:  3 × 2n × (8n/3) = 16n² per token   ✓ matches</span>
+<span class="n">hidden_dim</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span> <span class="o">*</span> <span class="n">n_embd</span><span class="p">)</span> <span class="o">//</span> <span class="mi">3</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">w1</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">n_embd</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">)</span>  <span class="c1"># gate</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">w2</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">n_embd</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">)</span>  <span class="c1"># up</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">w3</span> <span class="o">=</span> <span class="n">Linear</span><span class="p">(</span><span class="n">hidden_dim</span><span class="p">,</span> <span class="n">n_embd</span><span class="p">)</span>  <span class="c1"># down</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">w3</span><span class="p">(</span><span class="n">silu</span><span class="p">(</span><span class="n">w1</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">*</span> <span class="n">w2</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+</code></pre></div>
+
+<p>Tested at both d12 and d24 (GPT-2 scale). Worse on all measures — step efficiency, wall clock time, and FLOPs. ReLU² remains superior for nanochat. <strong>Not adopted.</strong></p>
+<hr />
+<h2 id="2026-02-03-flip-muon-mlp-lr-multiplier-pr-492">2026-02-03: Flip Muon MLP LR Multiplier (PR #492)</h2>
+<p>Tested flipping the shape-based LR heuristic in Muon from boosting tall matrices (input projections like <code>c_fc</code>) to boosting wide matrices (output projections like <code>c_proj</code>). The original code applies <code>max(1, rows/cols)^0.5</code>, giving ~2x LR to <code>c_fc</code>. The flipped version gives ~2x LR to <code>c_proj</code> instead, which aligns with classical fan-in/fan-out scaling conventions. This was proposed in <a href="https://github.com/karpathy/nanochat/pull/492">PR #492</a> and showed improvements in modded-nanogpt.</p>
+<p><strong>Result:</strong> Quick d12 experiment: slightly worse <strong>Not adopted.</strong></p>
+<hr />
+<h2 id="2026-02-03-skip-adamw-every-other-step">2026-02-03: Skip AdamW Every Other Step</h2>
+<p>Inspired by modded-nanogpt, tried stepping AdamW only on odd iterations while Muon steps every iteration. The idea is that small AdamW params (embeddings, scalars, gates) don't need updates as frequently as the large weight matrices, and skipping saves both compute and communication.</p>
+<p>Added <code>skip_adamw</code> parameter to <code>MuonAdamW.step()</code> and <code>DistMuonAdamW.step()</code> plus a matching <code>zero_grad(skip_adamw=...)</code> to let AdamW gradients accumulate over 2 steps. Used <code>lr *= 2**-0.5</code> (sqrt scaling) to compensate for the 2x effective batch size on AdamW params.</p>
+<p><strong>Result:</strong> for nanochat d12, we see ~2% faster tok/s, but each step is slightly worse in loss. On net, when plotting against wall clock time, it's slightly worse. <strong>Not adopted.</strong></p>
+<hr />
+<h2 id="2026-02-02-fp8-training-with-torchao">2026-02-02: FP8 Training with torchao</h2>
+<p>Integrated FP8 training using <code>torchao.float8</code> to accelerate Linear layer matmuls on H100 GPUs.</p>
+<h3 id="background_1">Background</h3>
+<p>FP8 (8-bit floating point) uses H100's FP8 tensor cores for ~2x theoretical matmul throughput. The tradeoff is quantization overhead: computing scales and casting tensors to/from FP8. Still, as an example torchtitan (Meta's distributed training framework) reports 25-28% speedups with FP8 for some of their experiments.</p>
+<p><strong>Previous attempt (Jan 2026):</strong> FP8 on just <code>lm_head</code> following modded-nanogpt with custom ops → 1% speedup, +2GB memory. Failed due to fragile torch.compile interaction. But this experiment was also done on ~d12 scale back then instead of the bigger model that gets GPT-2 capability of approx d24.</p>
+<p><strong>This attempt:</strong> Use torchao's <code>convert_to_float8_training()</code> on ALL Linear layers, increase model size to d24. The core snippet is:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">torchao.float8</span><span class="w"> </span><span class="kn">import</span> <span class="n">Float8LinearConfig</span><span class="p">,</span> <span class="n">convert_to_float8_training</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">Float8LinearConfig</span><span class="o">.</span><span class="n">from_recipe_name</span><span class="p">(</span><span class="s2">&quot;tensorwise&quot;</span><span class="p">)</span>
+<span class="n">convert_to_float8_training</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div>
+
+<p>But in practice it's more involved (see base_train.py).</p>
+<h3 id="results_2">Results</h3>
+<p><strong>Microbenchmark (d26 MLP, 65536x1664 @ 1664x6656):</strong></p>
+<p>| Method | Forward | Fwd+Bwd | Speedup |</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Forward</th>
+<th>Fwd+Bwd</th>
+<th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BF16 + compile</td>
+<td>2.00ms</td>
+<td>4.79ms</td>
+<td>1.00x</td>
+</tr>
+<tr>
+<td>FP8 rowwise + compile</td>
+<td>1.84ms</td>
+<td>4.55ms</td>
+<td>1.08x</td>
+</tr>
+<tr>
+<td>FP8 tensorwise + compile</td>
+<td>1.45ms</td>
+<td>4.06ms</td>
+<td><strong>1.38x</strong></td>
+</tr>
+<tr>
+<td>FP8 rowwise (no compile)</td>
+<td>2.89ms</td>
+<td>21.86ms</td>
+<td>0.23x ❌</td>
+</tr>
+</tbody>
+</table>
+<p>torch.compile is MANDATORY. Without it, FP8 is 4x slower due to unfused scaling ops.</p>
+<p><strong>Full training (d26):</strong></p>
+<p>| Config | tok/sec | vs baseline |</p>
+<table>
+<thead>
+<tr>
+<th>Config</th>
+<th>tok/sec</th>
+<th>vs baseline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BF16 baseline</td>
+<td>630K</td>
+<td>1.00x</td>
+</tr>
+<tr>
+<td>FP8 rowwise</td>
+<td>564K</td>
+<td>0.90x ❌</td>
+</tr>
+<tr>
+<td>FP8 tensorwise</td>
+<td>740K</td>
+<td><strong>1.17x</strong> ✓</td>
+</tr>
+</tbody>
+</table>
+<p>Memory usage also decreases quite a bit, by ~9GB (activations stored as FP8 instead of BF16).</p>
+<p>Seeing 17% speedup is encouraging but we're still not done yet because each step is now in lower precision and less powerful individually, so to make up for the precision drop we have to train longer. Empirically, running some sweeps overnight on d24 scale, I saw that the actual speedup (when you match performance) is closer to 5%. It's possible that our LLMs at ~d24 scale are still too small to confidently enjoy the speedups that come from fp8 for bigger models.</p>
+<h3 id="key-learnings">Key Learnings</h3>
+<p>For nanochat at approximate scale of interest (~GPT-2 capability, ~d24):</p>
+<ol>
+<li><strong>Tensorwise &gt;&gt; Rowwise</strong> - Rowwise computes per-row scales, overhead exceeds benefit. Tensorwise uses one scale per tensor.</li>
+<li><strong>Filter small layers</strong> - Layers with dims not divisible by 16 must be skipped (FP8 hardware requirement)</li>
+<li><strong>Larger models benefit more</strong> - d12 was still slower with FP8; d26+ shows gains. Therefore, in some depths there is a benefit to fp8 and in some there isn't. Keeping it configurable for now, passed in via kwargs and default off.</li>
+<li><strong>The effective, capability-matched speedup is lower still</strong> - because each step is of slightly lower precision/quality.</li>
+</ol>
+<h3 id="integration">Integration</h3>
+<p>Added <code>--fp8</code> flag to <code>base_train.py</code>, default recipe is "tensorwise", example of turning on:</p>
+<div class="codehilite"><pre><span></span><code>torchrun<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">8</span><span class="w"> </span>-m<span class="w"> </span>scripts.base_train<span class="w"> </span>--depth<span class="o">=</span><span class="m">24</span><span class="w"> </span>--fp8
+</code></pre></div>
+
+<p>Uses tensorwise by default. Requires <code>torchao==0.15.0</code> (compatible with torch 2.9.1), which was added to dependencies.</p>
+<p><strong>TLDR</strong>: turning on fp8 for GPT-2 capability nanochat model gives approx +5% capability-matched speedup.</p>
+<hr />
+<h2 id="2026-01-29-hyperballmuonh-experiments-negative-result">2026-01-29: Hyperball/MuonH Experiments (Negative Result)</h2>
+<p>Explored Hyperball optimization from <a href="https://psychedelic-sunstone-851.notion.site/Fantastic-Pretraining-Optimizers-and-Where-to-Find-Them-2-1-Hyperball-Optimization-2e924306e6f280e7a5ffee00eb40a0dd">this post</a> (saved to <code>knowledge/muonh.md</code>). Constrains weights to sphere of radius R (initial norm): <code>W_{t+1} = R · Normalize(W_t - η·R · Normalize(u_t))</code>. Had to change a number of details in a branch, e.g. not use zero init for our projections (or the initial norm would be zero), keep track of the initial norm, adjust Muon -&gt; MuonH for the update.</p>
+<p>Experiments on d12:</p>
+<p>| Experiment | Result |</p>
+<table>
+<thead>
+<tr>
+<th>Experiment</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MuonH for matrix params</td>
+<td>Worse than baseline</td>
+</tr>
+<tr>
+<td>MuonH + LR sweep (2.5e-3 to 1e-2)</td>
+<td>Still worse</td>
+</tr>
+<tr>
+<td>Added learnable RMSNorm scales (paper says γ preserves expressivity)</td>
+<td>Still worse</td>
+</tr>
+<tr>
+<td>Various RMSNorm init tweaks, e.g. 0 at init to residual</td>
+<td>Still worse</td>
+</tr>
+<tr>
+<td>AdamH for lm_head (paper recommends this)</td>
+<td>Broken - loss plateaus (see below)</td>
+</tr>
+<tr>
+<td>AdamH + learnable output scales</td>
+<td>Still worse</td>
+</tr>
+</tbody>
+</table>
+<p>Could not outperform the baseline implementation. The article doesn't go into too much detail on how AdamH is applied to <code>lm_head</code> exactly. The classifier layer has to be able to increase in magnitude to make more confident predictions over time. Tried a sensible version with added 0-D learnable scalar, and also with RMSNorms with per-channel learnable scalars both pre and post resnet blocks.</p>
+<p><strong>Result:</strong> This was not an out-of-the-box win for nanochat even with a mild attempt over a few hours at a bit of tuning and debugging. The idea itself is intuitively appealing. Might come back around later to try harder later.</p>
+<hr />
+<h2 id="2026-01-28-reverted-bigram-hash-embeddings">2026-01-28: Reverted Bigram Hash Embeddings</h2>
+<p>Removed bigram embeddings (engram-lite) from the codebase. At larger scale (d25), the improvement was tiny and disappeared entirely when measured by wall clock time. It also bloated the VRAM used. The extra parameters and complexity aren't justified.</p>
+<hr />
+<h2 id="2026-01-27-bigram-hash-embeddings-engram-lite">2026-01-27: Bigram Hash Embeddings (Engram-lite)</h2>
+<p>Explored N-gram memory modules inspired by the <a href="https://arxiv.org/abs/2601.07372">DeepSeek Engram paper</a> and <a href="https://github.com/KellerJordan/modded-nanogpt/pull/201">modded-nanogpt PR #201</a>.</p>
+<h3 id="background_2">Background</h3>
+<p>The Engram paper introduces "conditional memory" as a complement to MoE - using O(1) hash lookups to retrieve static N-gram patterns instead of reconstructing them through computation. Key insight: transformers waste early layers "simulating retrieval through computation" for patterns like named entities and formulaic phrases that could be simple table lookups.</p>
+<h3 id="what-we-tried">What We Tried</h3>
+<ol>
+<li><strong>Full Engram module with context-aware gating (paper design)</strong></li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Hash bigrams to retrieve embeddings, then gate with hidden state</span>
+<span class="n">e</span> <span class="o">=</span> <span class="n">embed</span><span class="p">(</span><span class="nb">hash</span><span class="p">(</span><span class="n">prev_token</span><span class="p">,</span> <span class="n">curr_token</span><span class="p">))</span>
+<span class="n">q</span> <span class="o">=</span> <span class="n">RMSNorm</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>           <span class="c1"># hidden state as query</span>
+<span class="n">k</span> <span class="o">=</span> <span class="n">RMSNorm</span><span class="p">(</span><span class="n">W_k</span> <span class="o">@</span> <span class="n">e</span><span class="p">)</span>     <span class="c1"># projected embedding as key</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">W_v</span> <span class="o">@</span> <span class="n">e</span>
+<span class="n">α</span> <span class="o">=</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">q</span> <span class="err">·</span> <span class="n">k</span> <span class="o">/</span> <span class="err">√</span><span class="n">d</span><span class="p">)</span>  <span class="c1"># scalar gate per position</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">α</span> <span class="o">*</span> <span class="n">v</span>
+</code></pre></div>
+
+<ul>
+<li>Injected after block 1 (paper found early injection optimal)</li>
+<li>Slight improvement, but quite a bit of complexity added.</li>
+</ul>
+<ol start="2">
+<li>
+<p><strong>Early-layer only injection</strong>
+- Only inject bigram signal in first 4 layers (where paper claims static pattern offloading helps most)
+- <strong>Result:</strong> Actually hurt performance. The model seems to need uniform injection across all layers.</p>
+</li>
+<li>
+<p><strong>Trigrams</strong>
+- Extended to hash both 2-grams and 3-grams, concatenating embeddings
+- <strong>Result:</strong> No improvement over bigrams alone. Dilutes capacity from more frequent 2-gram patterns.</p>
+</li>
+<li>
+<p><strong>Bigram-only with x0-style injection (modded-nanogpt engram-lite approach)</strong>
+- Simple hash: <code>(36313 * curr) XOR (27191 * prev) mod table_size</code>
+- Zero-init embedding table, learned per-layer lambdas
+- Add to residual at every layer: <code>x = resid_λ[i]*x + x0_λ[i]*x0 + bigram_λ[i]*x0_bigram</code>
+- <strong>Result:</strong> This simple approach works and provides a consistent improvement.</p>
+</li>
+</ol>
+<p>TLDR The winning approach follows modded-nanogpt's "engram-lite", simply adding the following module and feeding its output into the residual branch (gated by a per-layer learnable \lambda) before every single block:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BigramEmbed</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="n">table_multiplier</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embed</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Embedding</span><span class="p">(</span><span class="n">vocab_size</span> <span class="o">*</span> <span class="n">table_multiplier</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="p">(</span><span class="mi">36313</span> <span class="o">*</span> <span class="n">idx</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:])</span> <span class="o">^</span> <span class="p">(</span><span class="mi">27191</span> <span class="o">*</span> <span class="n">idx</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">%</span> <span class="p">(</span><span class="n">table_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+</code></pre></div>
+
+<p>As for optimal hyperparameters:</p>
+<ul>
+<li><strong>Table size:</strong> <code>vocab_size * 5</code> (~164K entries for 32K vocab). Swept a number of settings and 5 was optimal.</li>
+<li><strong>Injection:</strong> Every layer via learned <code>bigram_lambdas</code> (init 0.1 was better than 0.0).</li>
+<li><strong>Normalization:</strong> Also tried adding a <code>norm()</code> to the embeddings (mirroring the token embeddings), this was slightly worse.</li>
+<li><strong>Init:</strong> Zero-init embedding, so starts as identity (tried small noisy init, it's worse)</li>
+<li><strong>Optimizer:</strong> AdamW with same LR as token embeddings</li>
+</ul>
+<h3 id="key-learnings_1">Key Learnings</h3>
+<ol>
+<li>
+<p><strong>Gating didn't help at our scale.</strong> The paper's context-aware gating mechanism (sigmoid dot-product gate) added parameters and complexity without improvement. modded-nanogpt found the same: "simple direct addition to the residual stream outperformed by a decent margin."</p>
+</li>
+<li>
+<p><strong>Uniform injection beats early-only.</strong> Despite the paper's finding that early layers benefit most, restricting injection to early layers hurt. The x0-style "add everywhere with learned lambda" pattern works better for our architecture/scale.</p>
+</li>
+<li>
+<p><strong>Bigrams are sufficient.</strong> Trigrams didn't help - the extra context doesn't pay for the diluted capacity.</p>
+</li>
+<li>
+<p><strong>Scale matters.</strong> The Engram paper's results are at 27B params with MoE. At our ~100M-1B scale, the simpler approach wins. The elaborate gating mechanism may become useful at larger scales where collision handling matters more.</p>
+</li>
+</ol>
+<h3 id="parameters-added">Parameters Added</h3>
+<p>For d12 model with <code>table_multiplier=5</code>:</p>
+<ul>
+<li>Bigram embedding: 32768 × 5 × 768 = ~126M params</li>
+<li>Per-layer lambdas: 12 scalars (negligible)</li>
+</ul>
+<p>If you're keeping track, we now have <em>a lot</em> of parameters, a significant amount of them in embeddings (token embeddings, bigram embeddings, value embeddings). For example, for a d12 we now have:</p>
+<div class="codehilite"><pre><span></span><code>Parameter counts:
+wte                     : 25,165,824
+bigram_embed            : 125,829,120
+value_embeds            : 150,994,944
+lm_head                 : 25,165,824
+transformer_matrices    : 84,935,808
+scalars                 : 36
+total                   : 412,091,556
+</code></pre></div>
+
+<p>In other words, only about a quarter of parameters are now weight projections and the vast majority is embedding tables.</p>
+<p>Still, on all axes (steps, wall clock time, flops), this somewhat parameter-bloated architecture beats the baseline and will now become the default.</p>
+<p>After adding the engram-lite, I re-ran the scaling laws to determine the new optimal tokens:params ratio. I swept FLOPs in the range 1e18..1e19, exponentially strided in 4 settings (1e18, 2e18, 5e18, 1e19). I looked at a number of ways of determining the effective parameter count for the purposes of the scaling laws. The results looked like this:</p>
+<div class="codehilite"><pre><span></span><code>Kaplan-style (all projections including lm_head and no embeddings)
+
+Optimal configurations (from quadratic fits):
+FLOPs        Eff Params      Tokens          Ratio      Val BPB
+-----------------------------------------------------------------
+1e+18        110,678,115     1,241,505,403   11.2       0.8972
+2e+18        167,797,457     1,785,336,422   10.7       0.8616
+5e+18        250,650,865     2,642,234,152   10.8       0.8293
+1e+19        381,758,347     3,806,871,243   10.3       0.7999
+
+N \propto C^0.54, D \propto C^0.49
+
+Chinchilla-style (all parameters, period.)
+
+Optimal configurations (from quadratic fits):
+FLOPs        Eff Params      Tokens          Ratio      Val BPB
+-----------------------------------------------------------------
+1e+18        416,320,605     1,232,157,011   3.0        0.8974
+2e+18        560,239,841     1,763,669,281   3.2        0.8616
+5e+18        741,495,903     2,629,909,368   3.6        0.8291
+1e+19        988,644,331     3,884,841,895   4.0        0.7999
+
+N \propto C^0.37, D \propto C^0.50
+
+Transformer-only-style (only the projections inside the transformer)
+
+Optimal configurations (from quadratic fits):
+FLOPs        Eff Params      Tokens          Ratio      Val BPB
+-----------------------------------------------------------------
+1e+18        80,259,665      1,315,639,547   17.2       0.8966
+2e+18        131,488,566     1,864,134,141   14.5       0.8622
+5e+18        220,985,474     2,595,328,843   12.1       0.8302
+1e+19        401,213,504     3,328,704,512   8.5        0.7994
+
+N \propto C^0.70, D \propto C^0.41
+</code></pre></div>
+
+<p>Clearly, the Kaplan-style ratios are most consistent and produce stable ~0.5 exponents for both params and tokens, meaning we can have a single fixed ratio of tokens:params for compute optimal models. This turns out to be about ~10.5, which now becomes the new default.</p>
+<hr />
+<h2 id="2026-01-19-to-2026-01-22-optimizer-hyperparameter-sweep">2026-01-19 to 2026-01-22: Optimizer Hyperparameter Sweep</h2>
+<p>Ran ~320 experiments across 6 rounds, scaling from d12→d16→d20 to find optimal optimizer hyperparameters. Added granular per-component control to <code>setup_optimizers()</code> — separate LRs and betas for embedding, unembedding, value_embeds, resid_lambdas, x0_lambdas, and Muon matrix params.</p>
+<h3 id="what-we-swept">What We Swept</h3>
+<ul>
+<li>Learning rates for all 6 parameter groups</li>
+<li>Beta1/beta2 for all 5 AdamW groups</li>
+<li>Muon momentum (start/end), weight decay</li>
+<li>Hundreds of combinations (2-way, 3-way, 4-way, etc.)</li>
+</ul>
+<h3 id="the-journey">The Journey</h3>
+<p><strong>At d12</strong>, found two independent improvement routes:</p>
+<ul>
+<li><strong>Route A:</strong> emb_lr↑ (0.3→0.4), weight_decay↑ (0.1→0.15), matrix_lr↑ (0.02→0.025)</li>
+<li><strong>Route B:</strong> x0_lr↓ (0.5→0.2), x0_beta1↑ (0.8→0.9+)</li>
+</ul>
+<p>Both gave ~0.002 improvement, but combining them caused conflicts. Fine-tuning found wd=0.13, matrix_lr=0.027, emb_lr=0.38 helped slightly. Best d12 config: Route A + x0_beta1=0.95.</p>
+<p><strong>At d16</strong>, Route B became competitive with Route A. The routes still conflicted when combined.</p>
+<p><strong>At d20</strong> (target scale), everything changed:</p>
+<ul>
+<li>Fine-tuned values from d12 <strong>actively hurt</strong> performance</li>
+<li>Routes no longer conflicted</li>
+<li>Just <code>x0_beta1=0.96</code> alone captured nearly all the gains</li>
+</ul>
+<h3 id="final-x0_beta1-sweep-at-d20">Final x0_beta1 Sweep at d20</h3>
+<p>| x0_beta1 | val/bpb | Δ vs baseline |</p>
+<table>
+<thead>
+<tr>
+<th>x0_beta1</th>
+<th>val/bpb</th>
+<th>Δ vs baseline</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>0.96</strong></td>
+<td><strong>0.7971</strong></td>
+<td><strong>-0.0007</strong></td>
+</tr>
+<tr>
+<td>0.94</td>
+<td>0.7972</td>
+<td>-0.0006</td>
+</tr>
+<tr>
+<td>0.90</td>
+<td>0.7972</td>
+<td>-0.0006</td>
+</tr>
+<tr>
+<td>0.97</td>
+<td>0.7977</td>
+<td>-0.0001</td>
+</tr>
+<tr>
+<td>0.98</td>
+<td>0.8011</td>
+<td>+0.0033 💀</td>
+</tr>
+</tbody>
+</table>
+<p>Flat plateau from 0.90-0.96, then sharp cliff at 0.97+.</p>
+<h3 id="key-learnings_2">Key Learnings</h3>
+<ol>
+<li>
+<p><strong>Hyperparameters are scale-dependent.</strong> What works at d12 doesn't transfer to d20. The elaborate fine-tuning that won at d12 actively hurts at d20.</p>
+</li>
+<li>
+<p><strong>Improvement magnitude shrinks with scale.</strong> ~0.002 at d12 → ~0.0007 at d20. The baseline is already better-tuned for larger models.</p>
+</li>
+<li>
+<p><strong>Sharp cliffs exist.</strong> x0_beta1=0.98 is catastrophic while 0.96 is optimal.</p>
+</li>
+<li>
+<p><strong>Don't over-tune on small proxies.</strong> Validate at target scale before shipping.</p>
+</li>
+</ol>
+<h3 id="final-recommendation">Final Recommendation</h3>
+<p>For production d20 runs, add one flag:</p>
+<div class="codehilite"><pre><span></span><code>--x0-lambdas-beta1=0.96
+</code></pre></div>
+
+<p>Skip everything else discovered at smaller scales.</p>
+<hr />
+<h2 id="2026-01-18-more-various-experiments">2026-01-18: More various experiments</h2>
+<ul>
+<li>Tried Muon custom kernels for XXT and all the others. The improvement was there for targeted tests (~20%) but washed out completely to noise in an actual training run, especially because the Muon compute is split across all the workers. Abandoned due to complexity bloat.</li>
+<li>Fuse Q,K,V,O nn.Linear layers into a single QKVO Linear layer. ~Zero impact</li>
+<li>Tried the <code>sa_lambdas</code> that gate QKV and O. Slightly confused because of the use of rmsnorm, which erases the effect of any scalar multiplier. Helped a tiny bit (~1e-4 of loss), abandoned to control complexity.</li>
+</ul>
+<hr />
+<h2 id="2026-01-17-various-experiments">2026-01-17: Various experiments</h2>
+<p>Modded-nanogpt uses <a href="https://arxiv.org/abs/2410.17897">Value Embeddings</a> (VEs) in a funny U-shaped structure, 3 of them in total and with gates. I tried a large number of tweaks on this today:</p>
+<ul>
+<li>VEs at every layer, at alternating layers, U shaped, front and back. Alternating layers worked best, i.e. we end up with <em>a lot</em> more VEs than modded-nanogpt, at every other layer. It works better.</li>
+<li>Many parameters sharing ideas to reduce new parameter count, nothing here worked. All failed.</li>
+<li>Many ideas to reduce parameter count, the LLM hates all of them: low rank decompositions, projections. All failed.</li>
+<li>Gated yes or no and how much. Gate helps.</li>
+</ul>
+<p>Long story short is that the models <em>love</em> Value Embeddings. It is a way to add a huge amount of capacity (parameters) to the model at almost zero cost of FLOPs, because these embeddings are simply added to the Values tensor. Any attempt to reduce the capacity of value embeddings (param sharing, low rank, projections) fail. The model wants many of them, and with all the capacity, and doing so wins across all x axes of steps, flops and wall clock. I re-ran the scaling laws and, because the models are now very parameter bloated, the optimal ratio has halved from 8 to 4! Way down lower than Chinchilla's 20 at this point.</p>
+<p>Other experiments, looking at val/bpb as a function of all of steps, flops and wall clock time:</p>
+<ul>
+<li>Aspect ratio of 128 is worse than 64, I tried a sweep fixing FLOPs == 1e18 and 64 outperforms. The LLM prefers to be slightly thinner and longer.</li>
+<li>Head dim definitely prefers to be 128 instead of 64, i.e. fewer bigger heads</li>
+<li>Bunch of other random stuff like that.</li>
+</ul>
+<p>Keeping all of this work on a private branch for now but hope to push shortly.</p>
+<hr />
+<h2 id="2026-01-17-modded-nanogpt-ideas-sweep-continued">2026-01-17: Modded-nanogpt Ideas Sweep (Continued)</h2>
+<p>Continued testing ideas from modded-nanogpt.</p>
+<p>| Idea | Result | Notes |</p>
+<table>
+<thead>
+<tr>
+<th>Idea</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attention gates</td>
+<td>No improvement</td>
+<td>Per-head learnable gates on attention output. +1GB memory, decreased efficiency.</td>
+</tr>
+<tr>
+<td>Batch size schedule</td>
+<td>Abandoned</td>
+<td>8→16→24 with LR scaling. Made training script too bloated/complex, not worth cognitive overhead.</td>
+</tr>
+<tr>
+<td>Value embeddings</td>
+<td>Helps a lot</td>
+<td>Experiments still ongoing, more on this later.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2026-01-16-flash-attention-3-fallback-to-sdpa">2026-01-16: Flash Attention 3 Fallback to SDPA</h2>
+<p>Added automatic fallback from Flash Attention 3 to PyTorch's <code>scaled_dot_product_attention</code> (SDPA) for users without Hopper GPUs. This enables nanochat to run on older CUDA GPUs, CPU, and MPS (Apple Silicon).</p>
+<h3 id="implementation_2">Implementation</h3>
+<p>Created <code>nanochat/flash_attention.py</code> - a unified interface that:</p>
+<ul>
+<li>Detects FA3 availability at import time (requires sm90+ / Hopper)</li>
+<li>Exports a <code>flash_attn</code> object matching FA3's API exactly (<code>flash_attn.flash_attn_func</code>, <code>flash_attn.flash_attn_with_kvcache</code>)</li>
+<li>Automatically routes to FA3 or SDPA based on hardware</li>
+<li>Handles tensor layout differences: FA3 uses (B, T, H, D), SDPA uses (B, H, T, D)</li>
+<li>Implements sliding window attention via explicit masks for SDPA</li>
+<li>Manages KV cache manually for SDPA (FA3 does it in-place)</li>
+</ul>
+<h3 id="changes-to-existing-files">Changes to Existing Files</h3>
+<p>Changes to existing code were intentionally kept extremely minimal.</p>
+<p><strong>gpt.py</strong>: Only the import line changed and a comment</p>
+<p><strong>engine.py</strong>: Zero changes needed</p>
+<p><strong>base_train.py</strong>: Added status print and warnings:</p>
+<ul>
+<li>Prints whether FA3 or SDPA fallback is being used</li>
+<li>Warns about efficiency loss without FA3</li>
+<li>Warns about sliding window support if <code>--window-pattern</code> is not "L"</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<p>Tests are split into two classes due to dtype/device constraints:</p>
+<ol>
+<li>
+<p><strong>TestFA3VsSDPA</strong>: Comparison tests requiring Hopper GPU + bfloat16. Run both implementations on identical inputs and verify outputs match (max diff typically 0, at most ~0.004 for sliding window).</p>
+</li>
+<li>
+<p><strong>TestSDPAOnly</strong>: SDPA-only tests that run on any device with appropriate dtype. Verify forward pass, backward pass, and KV cache work correctly.</p>
+</li>
+</ol>
+<p>Added <code>_override_impl</code> mechanism for testing - can force 'fa3' or 'sdpa' to directly compare implementations.</p>
+<h3 id="notes">Notes</h3>
+<ul>
+<li>SDPA fallback is significantly slower than FA3 especially in that it lacks the sliding window attention support</li>
+<li>Recommend <code>--window-pattern L</code> (full context) when using SDPA fallback</li>
+</ul>
+<hr />
+<h2 id="2026-01-16-modded-nanogpt-ideas-sweep-mostly-negative">2026-01-16: Modded-nanogpt Ideas Sweep (Mostly Negative)</h2>
+<p>Tested several architectural ideas from modded-nanogpt to see if they transfer to nanochat. All of these did not help:</p>
+<p>| Idea | Result | Notes |</p>
+<table>
+<thead>
+<tr>
+<th>Idea</th>
+<th>Result</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Half-truncated RoPE</td>
+<td>No improvement</td>
+<td>Only first half of head dims get RoPE (base 1024, linspace). Second half "stationary".</td>
+</tr>
+<tr>
+<td>Asymmetric softcap</td>
+<td>Slightly worse</td>
+<td><code>23 * sigmoid((x+5)/7.5)</code> vs our symmetric <code>15 * tanh(x/15)</code>. May only help with FP8.</td>
+</tr>
+<tr>
+<td>Smear gate</td>
+<td>Negligible</td>
+<td>Blend each token with predecessor via learned gate. Tiny improvement not worth n_embd² params.</td>
+</tr>
+<tr>
+<td>Backout</td>
+<td>No improvement</td>
+<td>Save activations at ~60% through network, subtract scaled version at end.</td>
+</tr>
+<tr>
+<td>Skip connection</td>
+<td>Slightly worse</td>
+<td>Save at layer ~25%, add at layer ~50%. Also +2GB memory from storing activations.</td>
+</tr>
+</tbody>
+</table>
+<p>Value Embeddings do show promise. I need a more elaborate exploration of a few related ideas, which I leave for tomorrow.</p>
+<hr />
+<h2 id="2026-01-15-olmo-pretraining-mix-negative-result">2026-01-15: Olmo pretraining mix (Negative result)</h2>
+<p>I attempted to train on the Olmo 3 pretraining dataset <a href="https://huggingface.co/datasets/allenai/dolma3_mix-6T">allenai/dolma3_mix-6T</a> instead of FineWeb-edu. I ran into a number of <a href="https://huggingface.co/datasets/allenai/dolma3_mix-6T/discussions/2">errors and issues</a> trying to both download and process the dataset and then noticed some quality issues (e.g. some documents seem to be extremely short, like "5".). I managed to work around these with some sensible hacks (e.g. reject documents less than 100 characters in length) and tried to process the dataset exactly as FineWeb, re-trained the tokenizer and trained a d16 model. The CORE score decreased from 15.5 to 13.8, i.e. the result is quite a bit worse.</p>
+<p>I am still looking to try the <a href="https://arxiv.org/abs/2406.11794">DCLM dataset</a>, which according to the paper should be better that FineWeb-edu. I do have some concerns that the same group both prepared the DCLM dataset <em>and</em> introduced the CORE score so I'm a bit hesitant in case there was some overfitting to CORE score adjacent data distribution.</p>
+<p>Classifying as negative result and reverting back to FineWeb-edu for now.</p>
+<hr />
+<h2 id="2026-01-13-varlen-attention-negative-result">2026-01-13: Varlen Attention (Negative Result)</h2>
+<p>Attempted to prevent attention from "leaking" across document boundaries using Flash Attention's <code>flash_attn_varlen_func</code>, similar to modded-nanogpt's approach.</p>
+<h3 id="background_3">Background</h3>
+<p>With the BOS-aligned dataloader, multiple documents are packed into each row. Standard attention allows tokens to attend across document boundaries within a row. The hypothesis was that preventing this "leakage" via varlen attention might improve training.</p>
+<h3 id="approach-compute-cu_seqlens-from-inputs">Approach: Compute cu_seqlens from inputs</h3>
+<ul>
+<li>Find BOS positions: <code>(inputs.view(-1) == bos_token_id).nonzero()</code></li>
+<li>Gotcha 1: Variable-length <code>cu_seqlens</code> caused torch.compile recompilation (25s/iter!) - fixed by padding to fixed size</li>
+<li>Gotcha 2: <code>nonzero()</code> inside compiled model hit recompile limit - fixed by moving computation outside compiled region</li>
+</ul>
+<h3 id="final-results-d16">Final Results (d16)</h3>
+<p>| Metric | Baseline | Varlen |</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Baseline</th>
+<th>Varlen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>val_bpb</td>
+<td>0.85427</td>
+<td>0.85407</td>
+</tr>
+<tr>
+<td>MFU</td>
+<td>~same</td>
+<td>~same</td>
+</tr>
+<tr>
+<td>tok/sec</td>
+<td>~same</td>
+<td>~same</td>
+</tr>
+</tbody>
+</table>
+<p>Essentially identical. The 0.0002 bpb improvement is almost noise.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>Not worth the code complexity. The "leakage" across document boundaries within a row is not harmful - the model handles it fine. The BOS-aligned dataloader already provides the key benefit (every row starts with proper context). Not merging to master.</p>
+<hr />
+<h2 id="2026-01-13-bos-aligned-dataloader-with-bin-packing">2026-01-13: BOS-Aligned Dataloader with Bin Packing</h2>
+<p>Redesigned the pretraining and midtraining dataloader to ensure every sequence starts with a BOS token, and explored bin-packing algorithms to minimize wasted tokens.</p>
+<h3 id="problem-statement">Problem Statement</h3>
+<p>The original dataloader streams tokens into a flat buffer and reshapes into batches. This means some rows start mid-document (no BOS), which could confuse the model during training. We want every row to start with BOS and contain well-formed documents.</p>
+<h3 id="approach-1-greedy-crop-bos-simple">Approach 1: Greedy-Crop BOS (Simple)</h3>
+<p>Each row is built independently:</p>
+<ul>
+<li>Start with a document (which has BOS prepended)</li>
+<li>Pack more documents until row is full</li>
+<li>If a document doesn't fit, <strong>crop it</strong> to fill remaining space (discard the rest)</li>
+<li>100% utilization (no padding), but wastes cropped tokens</li>
+</ul>
+<h3 id="waste-analysis">Waste Analysis</h3>
+<p>Measured token waste empirically on real data (T=2048):</p>
+<ul>
+<li><strong>39.4% of tokens are cropped</strong> (discarded when docs don't fit)</li>
+<li><strong>22.9% is the theoretical minimum</strong> (tokens in docs longer than T+1 that can never fit)</li>
+<li>The extra ~16.5% comes from "unlucky" cropping when a long doc starts near the end of a row</li>
+</ul>
+<h3 id="bin-packing-algorithms-explored">Bin Packing Algorithms Explored</h3>
+<p>| Algorithm | Util% | Crop% | Pad% | Notes |</p>
+<table>
+<thead>
+<tr>
+<th>Algorithm</th>
+<th>Util%</th>
+<th>Crop%</th>
+<th>Pad%</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Greedy-Crop (baseline)</td>
+<td>100%</td>
+<td>39.4%</td>
+<td>0%</td>
+<td>Simple, no wasted compute</td>
+</tr>
+<tr>
+<td>Greedy-Pad</td>
+<td>78%</td>
+<td>23.0%</td>
+<td>22%</td>
+<td>Pads instead of crops - wastes compute</td>
+</tr>
+<tr>
+<td>First-Fit Decreasing (FFD)</td>
+<td>99.7%</td>
+<td>23.0%</td>
+<td>0.3%</td>
+<td>Near-optimal packing, minimal padding</td>
+</tr>
+<tr>
+<td><strong>BestFit-Crop</strong></td>
+<td>100%</td>
+<td>34.6%</td>
+<td>0%</td>
+<td>Smart cropping, no padding</td>
+</tr>
+</tbody>
+</table>
+<h3 id="bestfit-crop-algorithm">BestFit-Crop Algorithm</h3>
+<p>A middle ground that maintains 100% utilization while reducing cropping:</p>
+<ol>
+<li>Buffer N documents</li>
+<li>For each row, greedily pick the <strong>largest doc that fits entirely</strong></li>
+<li>Repeat until nothing fits</li>
+<li>When nothing fits, crop a doc to fill remaining space exactly</li>
+</ol>
+<p>This avoids "unlucky" crops by searching the buffer for better-fitting documents.</p>
+<p><strong>Results (T=2048):</strong></p>
+<ul>
+<li>Crop waste reduced from 39.4% → 34.6% (~12% relative improvement)</li>
+<li>Still achieves 100% utilization (no padding, every token trains)</li>
+<li>Slightly more rows than baseline (uses more documents per batch)</li>
+</ul>
+<h3 id="decision-keep-two-implementations">Decision: Keep Two Implementations</h3>
+<ol>
+<li>
+<p>Keep the original implementation which is very simple, efficient and has 100% token utilization in the batch (no padding with ignore tokens), but creates slightly more confusing token streams for the LLM because documents during training can start abruptly from the middle with no context. Note that this never happens at test time, where BOS is always present.</p>
+</li>
+<li>
+<p><strong><code>_bos_bestfit</code> (BestFit-Crop, new default)</strong>: Slightly more complex but still keeps 100% token utilization in the batch (no padding), but at the cost of discarding documents when they don't fit. In practice, about 34% of tokens are discarded with this approach. This is ok because for most models we care about we have plenty of data without having to go to multiple epochs. One more subtle effect is that it does skew the data distribution a tiny bit because, reliably and necessarily, tokens at the tails of long documents will be discarded. However, this doesn't seem to impact actual downstream performance.</p>
+</li>
+</ol>
+<h3 id="midtraining">Midtraining</h3>
+<p>The midtraining dataloader was also updated. Because conversations are on average a lot shorter than pretraining documents, only about 3.3% of tokens get cropped.</p>
+<h3 id="note-loss-scale">NOTE: loss scale</h3>
+<p>Do note that switching to the BOS dataloader changes the validation loss and makes all previous experiments not comparable in absolute value of the loss, because we have a lot fewer "confusing" tokens in the train/val batches. All tokens can look back and find the BOS token and have the full context of that document to make predictions. Therefore, the loss appears lower but this is "fake" to some extent, and the expectation is that the vast majority of relative comparisons done so far would agree with those before and after this change.</p>
+<hr />
+<h2 id="2026-01-13-number-token-split-pattern">2026-01-13: Number Token Split Pattern</h2>
+<p>Validated the <code>\p{N}{1,2}</code> pattern in <code>SPLIT_PATTERN</code> (tokenizer.py line 30), which I only guessed earlier and had a TODO for to validate. GPT-4 uses <code>\p{N}{1,3}</code> to group number sequences of up to 3 digits into tokens, but we suspected smaller vocab sizes benefit from grouping fewer digits per token.</p>
+<p><strong>Results (d12, vocab=32K):</strong>
+| Pattern | val_bpb |</p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>val_bpb</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>\p{N}{1,1}</code></td>
+<td>0.969</td>
+</tr>
+<tr>
+<td><code>\p{N}{1,2}</code></td>
+<td><strong>0.965</strong></td>
+</tr>
+<tr>
+<td><code>\p{N}{1,3}</code></td>
+<td>0.972</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conclusion:</strong> <code>{1,2}</code> is optimal for vocab size 32K. Grouping 3 digits wastes tokens on rare 3-digit combinations; grouping 1 digit is too fine-grained and bloats token sequences. Keeping <code>{1,2}</code> as default.</p>
+<hr />
+<h2 id="2026-01-13-fp8-training-for-lm_head">2026-01-13: FP8 Training for lm_head</h2>
+<p>Attempted to use FP8 (8-bit floating point) for the lm_head layer to speed up the large vocab projection matmul. H100 GPUs have FP8 tensor cores that can theoretically provide ~2x speedup over BF16.</p>
+<h3 id="implementation-approaches-tried">Implementation Approaches Tried</h3>
+<ol>
+<li>
+<p><strong>Dynamic Scaling (failed)</strong>
+- Compute <code>x.abs().max()</code> and <code>w.abs().max()</code> each forward to determine scales
+- Problem: <code>.item()</code> calls cause graph breaks with torch.compile
+- Tried <code>@torch._dynamo.allow_in_graph</code> pattern (like torchao.float8) - worked but no speedup
+- Tried <code>torch.library.custom_op</code> with float scales - caused NaN gradients after first optimizer step
+- Root cause: interaction between custom ops, dynamic scale computation, and torch.compile is fragile</p>
+</li>
+<li>
+<p><strong>Static Scaling (partial success)</strong>
+- Pre-set scales at init time like modded-nanogpt: <code>x_scale=10/448, w_scale=0.1/448</code>
+- <code>grad_scale</code> computed dynamically from batch size (safe since it's just <code>1/(B*T)/57344</code> due to the gradient expression of cross entropy). modded-nanogpt has a bug here probably because they set <code>grad_scale = 0.75/448</code>, but grads are in E5M2 so this should probably be <code>1/57344</code>, 1 being the amax of any individual element of cross entropy loss, and no normalization by B,T because they use sum reduction not mean reduction.
+- Uses <code>torch.library.custom_op</code> with <code>@torch.compile</code> on inner kernels
+- This works correctly - no NaNs, proper gradients</p>
+</li>
+</ol>
+<h3 id="results-d12">Results (d12)</h3>
+<p>| Metric | BF16 Baseline | FP8 lm_head |</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>BF16 Baseline</th>
+<th>FP8 lm_head</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPU Memory</td>
+<td>34 GB</td>
+<td>36 GB</td>
+</tr>
+<tr>
+<td>tok/sec</td>
+<td>baseline</td>
+<td>~1% faster</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-memory-mystery">The Memory Mystery</h3>
+<p>FP8 <em>should</em> save memory since we store <code>x_f8</code> (1 byte) instead of <code>x</code> (2 bytes) for backward. But we see 2GB <em>increase</em>. Suspected causes:</p>
+<ul>
+<li><code>torch.compile</code> on inner kernels creating extra buffers/specializations</li>
+<li><code>torch._scaled_mm</code> internal workspace allocations</li>
+<li>Custom op registration machinery overhead</li>
+</ul>
+<p>Tried saving original weight <code>w</code> (just a reference to parameter) instead of <code>w_f8</code> in backward, then re-quantizing on the spot during backward - didn't help. Still saw bump.</p>
+<h3 id="microbenchmark-vs-reality">Microbenchmark vs Reality</h3>
+<p>Raw microbenchmark showed promise:</p>
+<ul>
+<li>BF16 matmul: 16.95 ms</li>
+<li>FP8 matmul (static scales): 10.31 ms (1.64x faster)</li>
+<li>FP8 with dynamic scaling: 12.25 ms (1.38x faster)</li>
+</ul>
+<p>But in full training, the ~1% tok/sec improvement doesn't justify the 2GB memory increase and the added code complexity and the need to tune scale factors for both x and w.</p>
+<h3 id="code-artifacts">Code Artifacts</h3>
+<p>See the branch <code>fp8_attempt_fail</code> for:</p>
+<ul>
+<li><code>nanochat/fp8_static.py</code> - Static scaling implementation (working)</li>
+<li><code>nanochat/fp8_dynamic.py</code> - Dynamic scaling implementation (torchao-style, working but slow)</li>
+<li><code>gpt.py</code> imports <code>fp8_static.LinearFP8</code> and simply swaps it for <code>lm_head</code> in <code>gpt.py</code>.</li>
+</ul>
+<h3 id="open-questions">Open Questions</h3>
+<ul>
+<li>Why does the custom op approach use more memory than vanilla BF16?</li>
+<li>Why is the bump in tok_per_sec so low? We should see ~1.6X speedup in both the forward pass and also (twice) in backward pass for the gradients. Granted, Amdahl's law is part of the solution because our vocab_size is only 32K so the final layer isn't a huge part of the profile but the expected speedup is still not fully realized.</li>
+</ul>
+<p><strong>Conclusion:</strong> Negative result for now. The implementation works correctly but provides marginal speedup with <em>increased</em> memory usage. I'm not understanding the torch.compile interaction here. The complexity of FP8 custom ops isn't justified for lm_head alone. TODO to study in more detail the way this is implemented in other libraries, e.g. torchao.</p>
+<hr />
+<h2 id="2026-01-12-multi-token-prediction-mtp">2026-01-12: Multi-Token Prediction (MTP)</h2>
+<p>Ported multi-token prediction from modded-nanogpt. Instead of predicting just the next token, predict the next n tokens at each position with weighted loss.</p>
+<h3 id="implementation_3">Implementation</h3>
+<ul>
+<li>Instead of calling the loss <code>n_predict</code> times, uses a fancy batched computation using <code>unfold</code> + <code>gather</code> + cross-entropy decomposition (<code>CE = logsumexp - logits[target]</code>)</li>
+<li>Schedule anneals from 3-token to 1-token prediction:</li>
+<li>0-33%: <code>[1.0, 0.5, 0.25→0]</code> (3rd token fades)</li>
+<li>33-67%: <code>[1.0, 0.5→0]</code> (2nd token fades)</li>
+<li>67-100%: <code>[1.0]</code> (standard next-token)</li>
+<li>Weights normalized to sum to 1</li>
+</ul>
+<h3 id="results-d12_1">Results (d12)</h3>
+<p>| Metric | Baseline | MTP |</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Baseline</th>
+<th>MTP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPU Memory</td>
+<td>34 GB</td>
+<td>47 GB</td>
+</tr>
+<tr>
+<td>MFU</td>
+<td>41%</td>
+<td>40%</td>
+</tr>
+<tr>
+<td>val/bpb (per step)</td>
+<td>baseline</td>
+<td>same/slightly worse</td>
+</tr>
+<tr>
+<td>val/bpb (wall clock)</td>
+<td>baseline</td>
+<td>noticeably worse</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conclusion:</strong> Negative result for nanochat. The extra memory and compute overhead from predicting multiple tokens doesn't pay off, in fact the results get worse. The auxiliary loss signal may help in other settings (larger models, different architectures?), but for our setup it's pure overhead at the moment.</p>
+<hr />
+<h2 id="2026-01-11-sliding-window-attention">2026-01-11: Sliding Window Attention</h2>
+<p>Added configurable sliding window attention, inspired by GPT-3's alternating short/long pattern.</p>
+<p><strong>Pattern string configuration:</strong></p>
+<ul>
+<li>New <code>--window_pattern</code> CLI arg and <code>GPTConfig.window_pattern</code> field</li>
+<li>Pattern is tiled across layers (e.g., <code>SSSL</code> for 20 layers → <code>SSSLSSSLSSSLSSSLSSSL</code>)</li>
+<li>Final layer always forced to L (full context) regardless of pattern</li>
+<li>Short window = <code>sequence_len // 2</code></li>
+<li>Long window = <code>sequence_len</code> (full context)</li>
+<li>All previous models so far have been simply <code>L</code> and checkpoint loading is modified accordingly to fill in this param for old models, see <code>_patch_missing_config_keys</code></li>
+</ul>
+<p>Quick experiments showed <code>SSSL</code> (every 4th layer is long) works well - provides a good balance between compute savings and model quality. This is now the default.</p>
+<hr />
+<h2 id="2026-01-11-flash-attention-3-integration">2026-01-11: Flash Attention 3 Integration</h2>
+<p>Replaced PyTorch's <code>scaled_dot_product_attention</code> (FA2) with Flash Attention 3 for training and inference.</p>
+<h3 id="changes-made">Changes Made</h3>
+<ol>
+<li>
+<p><strong>FA3 via <code>kernels</code> package</strong>
+- Official FA3 is "beta" and requires building from source (painful)
+- Using <code>kernels</code> package from HuggingFace Hub: <code>get_kernel('varunneal/flash-attention-3')</code>
+- Loads pre-built wheels, works out of the box on H100</p>
+</li>
+<li>
+<p><strong>Simplified attention code</strong>
+- FA3 uses <code>(B, T, H, D)</code> layout matching our projection output directly - no transpose needed
+- Training: <code>flash_attn.flash_attn_func(q, k, v, causal=True)</code>
+- Inference: <code>flash_attn.flash_attn_with_kvcache()</code> handles all cache cases in one call
+- Removed 3 separate FA2 code paths (training, single-token, chunk inference)
+- GQA handled automatically when n_kv_heads &lt; n_heads</p>
+</li>
+<li>
+<p><strong>Rewrote KVCache for FA3</strong>
+- Old format: <code>(num_layers, 2, B, H, T, D)</code> combined tensor
+- New format: separate <code>k_cache</code> and <code>v_cache</code> of shape <code>(num_layers, B, T, H, D)</code>
+- FA3 updates cache in-place during <code>flash_attn_with_kvcache</code>
+- Position tracked via <code>cache_seqlens</code> tensor (int32, per batch element)
+- Simpler API: <code>get_layer_cache()</code>, <code>advance()</code>, <code>reset()</code>, <code>prefill()</code></p>
+</li>
+</ol>
+<h3 id="results_3">Results</h3>
+<ul>
+<li><strong>~9% improvement in tok/sec</strong> during training out of the box</li>
+<li>Benchmarks showed FA3 is 2x faster than FA2 at realistic training sizes (batch=32, seq=2048)</li>
+<li>FA3 supports sliding window via <code>window_size=(left, 0)</code>, which is huge and expected to give further improvements. This is ready to tune but keeping full context for now.</li>
+</ul>
+<hr />
+<h2 id="2026-01-11-per-layer-residual-scalars-x0-resid-lambdas">2026-01-11: Per-Layer Residual Scalars (x0 &amp; resid lambdas)</h2>
+<p>Cherry-picked an idea from modded-nanogpt around learnable per-layer residual connections.</p>
+<h3 id="changes-made_1">Changes Made</h3>
+<ol>
+<li>
+<p><strong>x0_lambdas (x0 residual connections)</strong>
+- Save initial normalized embedding as <code>x0</code> after <code>norm(wte(idx))</code>
+- At each layer, blend x0 back in: <code>x = resid_lambdas[i] * x + x0_lambdas[i] * x0</code>
+- Zero-initialized, so disabled at start; model learns which layers benefit from the shortcut
+- Provides direct path from embedding to deep layers, helps preserve token information</p>
+</li>
+<li>
+<p><strong>resid_lambdas (residual stream scaling)</strong>
+- Per-layer multiplicative scaling of the residual stream
+- Initialized to 1.0 (neutral, standard transformer behavior)
+- Allows model to learn to amplify/dampen residual at each layer</p>
+</li>
+<li>
+<p><strong>DistAdamW small parameter handling</strong>
+- Added support for parameters with &lt; 1024 elements (like the scalar lambdas)
+- Small params use <code>all_reduce</code> instead of <code>reduce_scatter</code>/<code>all_gather</code>
+- Fixes crash when param shape isn't divisible by world_size</p>
+</li>
+</ol>
+<h3 id="key-finding-different-lr-sensitivity">Key Finding: Different LR Sensitivity</h3>
+<p>The two scalar types need very different learning rates:</p>
+<ul>
+<li><strong>x0_lambdas (additive)</strong>: Can use normal LR (~0.5). Adding a fraction of x0 is forgiving.</li>
+<li><strong>resid_lambdas (multiplicative)</strong>: Needs ~100x smaller LR (~0.005). Multiplying the residual compounds through layers.</li>
+</ul>
+<p>Implementation: <code>resid_params</code> gets <code>scalar_lr * 0.01</code>, <code>x0_params</code> gets full <code>scalar_lr</code>.</p>
+<h3 id="experiment-results">Experiment Results</h3>
+<p>Swept <code>--scalar_lr</code> (controlling x0_lambdas) at multiple depths:</p>
+<p>| Depth | Baseline (disabled) | Best scalar_lr | Best val_bpb | Δ bpb |</p>
+<table>
+<thead>
+<tr>
+<th>Depth</th>
+<th>Baseline (disabled)</th>
+<th>Best scalar_lr</th>
+<th>Best val_bpb</th>
+<th>Δ bpb</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>d8</td>
+<td>1.0885</td>
+<td>0.20</td>
+<td>1.0782</td>
+<td>-0.0103</td>
+</tr>
+<tr>
+<td>d12</td>
+<td>0.9770</td>
+<td>0.60</td>
+<td>0.9693</td>
+<td>-0.0077</td>
+</tr>
+<tr>
+<td>d16</td>
+<td>0.9059</td>
+<td>0.20</td>
+<td>0.9002</td>
+<td>-0.0057</td>
+</tr>
+<tr>
+<td>d20</td>
+<td>0.8565</td>
+<td>0.10</td>
+<td>0.8526</td>
+<td>-0.0039</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Observations:</strong></p>
+<ul>
+<li>Consistent improvement across all model sizes</li>
+<li>Optimal LR varies by depth; default of 0.5 is reasonable, but 0.6 is better for d12</li>
+<li>Adding resid_lambdas (with 0.01x LR) gives small additional improvement over x0 alone</li>
+</ul>
+<h3 id="meta-device-footgun">Meta Device Footgun</h3>
+<p>Important lesson: <code>__init__</code> runs in meta device context, so any tensor values set there are fake. Must initialize actual values in <code>init_weights()</code>. Added docstring warning to <code>__init__</code>.</p>
+<h3 id="summary">Summary</h3>
+<p>Added <code>--scalar_lr</code> (default 0.5) controlling learnable per-layer scalars. The formula <code>x = resid_lambdas[i] * x + x0_lambdas[i] * x0</code> gives the model control over residual scaling and direct shortcuts to the initial embedding. Solid improvement with essentially no compute overhead.</p>
+<hr />
+<h2 id="2026-01-10-muon-optimizer-upgrades-cautious-weight-decay">2026-01-10: Muon Optimizer Upgrades &amp; Cautious Weight Decay</h2>
+<p>Cherry-picked improvements from NorMuon (modded-nanogpt) into our simpler Muon implementation. Decided against using NorMuon directly due to hard-coded architecture assumptions (expects 32 params split 10 attn + 22 mlp), parameter labeling requirements, and complexity.</p>
+<h3 id="changes-made_2">Changes Made</h3>
+<ol>
+<li>
+<p><strong>Polar Express Orthogonalization</strong>
+- Replaced Newton-Schulz iteration with "Polar Express Sign Method" from <a href="https://arxiv.org/pdf/2505.16932">arxiv.org/pdf/2505.16932</a>
+- Uses 5 different coefficient tuples (one per iteration) instead of fixed coefficients
+- Both methods kept in code for easy comparison (<code>zeropower_via_polar_express</code> vs <code>zeropower_via_newtonschulz5</code>)
+- <strong>Result:</strong> No dramatic/noticeable difference in training, but keeping the new Polar Express as default.</p>
+</li>
+<li>
+<p><strong>NorMuon Variance Reduction</strong>
+- Added per-neuron/column adaptive learning rate from NorMuon (<a href="https://arxiv.org/pdf/2510.05491">arxiv.org/pdf/2510.05491</a>)
+- Maintains <code>second_momentum_buffer</code> with shape <code>[rows, 1]</code> or <code>[1, cols]</code> (whichever is smaller)
+- Normalizes updates based on running per-row/col variance estimate (beta2=0.95)
+- Memory overhead: ~1/max(rows, cols) per param, negligible
+- <strong>Result:</strong> Led to a very small improvement, kept and enabled by default.</p>
+</li>
+<li>
+<p><strong>Cautious Weight Decay</strong>
+- Only decays weights where <code>update * weight &gt;= 0</code> (same sign) from <a href="https://arxiv.org/abs/2411.16085">arxiv.org/abs/2411.16085</a>
+- Standard WD always pulls toward zero; cautious WD skips decay when gradient is pushing weight away from zero
+- <strong>Implementation note:</strong> Had to inline the logic rather than use a separate <code>@torch.compile</code> function. Passing changing float values (like <code>weight_decay</code> during scheduling) as function arguments triggers recompilation. Reading from <code>group["weight_decay"]</code> inside the step avoids this.
+- <strong>Result:</strong> Solid improvements, especially the cautious version was better than standard wd.
+- Now defaults to ON for Muon via the <code>weight_decay</code> param. AdamW still has no weight decay and is hardcoded to 0 weight decay, might try to re-tune this later.</p>
+</li>
+<li>
+<p><strong>Weight decay schedule</strong>
+- Added a linear schedule to weight decay that is default on from 1.0 to 0.0 (i.e. start with max weight decay in the beginning of training, then ramp to 0 by the end). Worked better than a static setting in experiments. (modded-nanogpt has the same schedule but it is implemented in a more confusing way by multiplying twice by the learning rate, which is already wired up to a decay schedule).</p>
+</li>
+</ol>
+<h3 id="weight-decay-scaling-experiments">Weight Decay Scaling Experiments</h3>
+<p>Swept weight decay values at d8, d12, d16, d20 to find optimal values and scaling law.</p>
+<p><strong>Optimal Values Found:</strong>
+| Depth | Width (channels) | Optimal WD |</p>
+<table>
+<thead>
+<tr>
+<th>Depth</th>
+<th>Width (channels)</th>
+<th>Optimal WD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>d8</td>
+<td>512</td>
+<td>~0.40</td>
+</tr>
+<tr>
+<td>d12</td>
+<td>768</td>
+<td>~0.22</td>
+</tr>
+<tr>
+<td>d16</td>
+<td>1024</td>
+<td>~0.10</td>
+</tr>
+<tr>
+<td>d20</td>
+<td>1280</td>
+<td>~0.08</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scaling Law:</strong></p>
+<ul>
+<li>Fit power law: <code>WD = k / channels^α</code> in log-log space</li>
+<li>Found α ≈ 1.97 (approximately 2), meaning WD ∝ 1/width²</li>
+</ul>
+<p><strong>Practical Formula:</strong></p>
+<div class="codehilite"><pre><span></span><code>WD_target = WD_reference × (d_reference / d_target)²
+</code></pre></div>
+
+<p>Example: If d12 optimal is 0.22, then d20 optimal ≈ 0.22 × (12/20)² ≈ 0.08</p>
+<p><strong>Reference:</strong> Moonlight paper uses fixed WD=0.1 for their 15B MoE model. Our experiments indicated a scaling law where the optimal WD changed with depth, so we go along with the empirical scaling law.</p>
+<h3 id="summary_1">Summary</h3>
+<p>Muon was changed to use Polar Express, added NorMuon variance reduction, and cautious weight decay with schedule that ramps linearly to zero. All of these changes follow modded-nanogpt repo, but all of them were also validated piece by piece to yield improvements in nanochat with the exception of the Polar Express change which was in the noise. This is default on and configurable with <code>--weight_decay</code>, using simply 0.2 and ∝ 1/width² scaling. The kwarg <code>--weight_decay</code> is therefore changing as of this change. It used to configure AdamW via standard weight decay and now it becomes exclusively used in Muon (AdamW is hardcoded to 0.0), and it is scaled based on depth.</p>
+<hr />
+<h2 id="2026-01-08-exp_grad_clip-gradient-clipping">2026-01-08: exp_grad_clip - Gradient Clipping</h2>
+<p><strong>Hypothesis:</strong> Gradient clipping may be unnecessary overhead. Tested L2 norm clipping at various thresholds (0.25, 0.5, 1.0, 2.0) and elementwise clipping.</p>
+<p><strong>Results:</strong></p>
+<ul>
+<li>No benefit at any scale tested (d12, d20)</li>
+<li>All variants within noise (~0.9827 val_bpb)</li>
+<li>Grad norm never exceeds 1.0 naturally, so clipping is always inactive</li>
+<li>Clipping adds ~2% time overhead from the all-reduce</li>
+</ul>
+<p><strong>Bug Found:</strong> Original implementation clipped local gradients before sync. Since this codebase doesn't use DDP (gradient sync is in the optimizers), each rank was clipping based on its own local norm. Fixed on the branch with proper distributed all-reduce.</p>
+<p><strong>Observation:</strong> modded-nanogpt does not appear to clip either right now.</p>
+<p><strong>Summary:</strong> Deleted all grad-clip code paths. The code naturally produces well-behaved gradients. This improves a bit of MFU because we don't have to calculate and sync grad norms.</p>
+            </article>
+            
+            <nav class="page-nav"><a href="dev/LEADERBOARD.html" class="nav-link prev">← Leaderboard</a><a href="README.html" class="nav-link next">nanochat →</a></nav>
+        </main>
+    </div>
+</body>
+</html>

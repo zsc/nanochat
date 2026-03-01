@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>nanochat：面向模型训练与数据准备人员的中文手册</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h2 id="_1">项目背景</h2>
+<p>面向模型训练和数据准备人员，生成一个 nanochat 的中文 markdown。</p>
+<p>文件组织是 index.md + chapter1.md + ...
+不写代码。
+提供 rule-of-thumb。</p>
+<h2 id="_2">章节结构要求</h2>
+<p>每个章节应包含：</p>
+<ol>
+<li><strong>开篇段落</strong>：简要介绍本章内容和学习目标</li>
+<li><strong>文字论述</strong>：以文字论述为主，适当配上ASCII 图说明。</li>
+<li><strong>本章小结</strong>：总结关键概念和公式</li>
+<li><strong>练习题</strong>：
+   - 每章包含6-8道练习题
+   - 50%基础题（帮助熟悉材料）
+   - 50%挑战题（包括开放性思考题）
+   - 每题提供提示（Hint）
+   - 答案默认折叠，不包含代码</li>
+<li><strong>常见陷阱与错误</strong> (Gotchas)：每章包含该主题的常见错误和调试技巧</li>
+</ol>
+<hr />
+<h1 id="nanochat">nanochat：面向模型训练与数据准备人员的中文手册</h1>
+<p><em>对齐仓库版本：<code>c7ba252</code>（更新日期：2026-03-01）</em></p>
+<p>本书面向“要把一个小模型从零训练到可对话”的一线同学：既关心<strong>数据怎么来、怎么切、怎么喂</strong>，也关心<strong>训练怎么跑得快、评估怎么对齐、产物怎么落盘并能聊起来</strong>。nanochat 的目标是把 Tokenizer → 预训练 → SFT → RL → 评估 → 推理/Chat UI 这条链路压到最小可读、最小可改、单机单节点可复现。</p>
+<h2 id="_3">你会得到什么</h2>
+<ul>
+<li>一条可复现的端到端流水线（以 <code>runs/speedrun.sh</code> 为“事实标准”）。</li>
+<li>以数据准备/训练工程视角，拆解每一阶段的<strong>输入/输出约定</strong>与<strong>关键决策点</strong>。</li>
+<li>每章都提供可操作的经验法则（rule-of-thumb）、练习题与常见坑（Gotchas），用于上手与排障。</li>
+</ul>
+<h2 id="_4">读者定位（建议你属于其中之一）</h2>
+<ul>
+<li>模型训练工程师：关注吞吐、显存、数值稳定、分布式细节与跑通全流程。</li>
+<li>数据准备/数据工程：关注数据格式、切分、shuffle、packing、mask、数据混配与质量控制。</li>
+<li>研究/实验同学：关注 scaling sweep、指标（BPB/CORE/ChatCORE）、实验记录与可比较性。</li>
+</ul>
+<h2 id="_5">仓库导航（先认路再动手）</h2>
+<ul>
+<li><code>runs/</code>：端到端脚本入口（推荐从 <code>runs/speedrun.sh</code> 开始）。</li>
+<li><code>scripts/</code>：各阶段的“可执行入口”（tok/base/sft/rl/eval/web）。</li>
+<li><code>nanochat/</code>：核心库（模型、tokenizer、dataloader、engine、eval、checkpoint、report）。</li>
+<li><code>tasks/</code>：SFT/评测数据集封装（多为 HuggingFace datasets + 统一对话格式）。</li>
+<li><code>dev/</code>：参考/分析/文档（数据重打包参考、leaderboard、实验记录与图表）。</li>
+</ul>
+<h2 id="_6">一张图看全流程（你将反复回到这张图）</h2>
+<div class="codehilite"><pre><span></span><code>预训练语料（parquet shards）          评测 bundle / 下游任务
+          │                               │
+          ▼                               ▼
+Tokenizer 训练与评估  ─────────────►  BPB / CORE / 采样
+ (scripts/tok_*)                      (scripts/base_eval.py)
+          │
+          ▼
+Base 预训练（GPT） ────────────────►  保存 checkpoint + report
+ (scripts/base_train.py)               (nanochat/checkpoint_manager.py, nanochat/report.py)
+          │
+          ▼
+Chat SFT（对话/工具/多选能力） ─────►  Chat 评测（ChatCORE）
+ (scripts/chat_sft.py)                 (scripts/chat_eval.py)
+          │
+          ▼
+RL（GSM8K 上的采样 + reward） ──────►  Chat 推理/交互
+ (scripts/chat_rl.py)                  (scripts/chat_cli.py / scripts/chat_web.py)
+</code></pre></div>
+
+<h2 id="_7">强约定（非常重要）</h2>
+<ul>
+<li><strong>产物默认落盘到缓存目录</strong>：默认 <code>~/.cache/nanochat</code>，可用环境变量 <code>NANOCHAT_BASE_DIR</code> 覆盖（见 <code>nanochat/common.py</code> 与 <code>runs/*.sh</code>）。</li>
+<li><strong>很多步骤会联网下载</strong>：预训练数据（HuggingFace dataset）、CORE 评测包（S3）、identity conversations（S3）、部分合成数据脚本可能调用第三方 API（见 <code>dev/gen_synthetic_data.py</code>）。</li>
+<li><strong>本书以“可跑通与可解释”为第一优先级</strong>：先把输入/输出、数据格式、指标与排障路径弄清楚，再谈花式技巧。</li>
+</ul>
+<h2 id="_8">推荐阅读路线（按你的工作重心选）</h2>
+<ul>
+<li><strong>我想最快跑通全流程</strong>：第 1 章 → 第 2 章 → 第 3/4 章（数据+tokenizer）→ 第 5 章（预训练）→ 第 8 章（SFT）→ 第 10 章（推理/UI）。</li>
+<li><strong>我主要做数据准备</strong>：第 3 章 → 第 4 章 → 第 6 章（packing/mask）→ 第 8 章（SFT 混配与格式）→ 第 7 章（指标如何被数据影响）。</li>
+<li><strong>我主要做训练/性能</strong>：第 2 章 → 第 5 章 → 第 6 章 → 第 7 章 → 第 11 章（miniseries/scaling）。</li>
+</ul>
+<h2 id="index-chapter1md">目录（index + chapter1.md + ...）</h2>
+<blockquote>
+<p>下面链接的章节文件将逐步补齐。每章默认包含：开篇段落、文字论述（可含 ASCII 图）、本章小结、练习题（含 Hint，答案折叠且不含代码）、Gotchas。</p>
+</blockquote>
+<ol>
+<li>
+<p><a href="chapter1.html">第 1 章：nanochat 是什么，以及它的“最小全流程”</a><br />
+   目标：建立整体心智模型；知道“你在训练什么、数据从哪来、如何评估”。参考：<code>README.md</code>、<code>runs/speedrun.sh</code>。</p>
+</li>
+<li>
+<p><a href="chapter2.html">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</a><br />
+   目标：把一次实验跑成“可复现的产物”；理解 <code>NANOCHAT_BASE_DIR</code>、report、wandb 的边界。参考：<code>nanochat/common.py</code>、<code>nanochat/report.py</code>、<code>runs/*.sh</code>。</p>
+</li>
+<li>
+<p><a href="chapter3.html">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</a><br />
+   目标：理解 nanochat 预训练语料的组织方式与下载策略；知道“训练/验证”如何划分。参考：<code>nanochat/dataset.py</code>、<code>dev/repackage_data_reference.py</code>。</p>
+</li>
+<li>
+<p><a href="chapter4.html">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</a><br />
+   目标：从数据与训练视角理解 tokenizer：split pattern、special tokens、token_bytes 与 bpb。参考：<code>nanochat/tokenizer.py</code>、<code>scripts/tok_train.py</code>、<code>scripts/tok_eval.py</code>。</p>
+</li>
+<li>
+<p><a href="chapter5.html">第 5 章：预训练配方（一个旋钮：<code>depth</code>，其余自动计算）</a><br />
+   目标：读懂 <code>base_train</code> 的“计算最优”思路：模型形状、批大小、训练步数（FLOPs 或 tokens:params）。参考：<code>scripts/base_train.py</code>、<code>nanochat/gpt.py</code>、<code>nanochat/optim.py</code>。</p>
+</li>
+<li>
+<p><a href="chapter6.html">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</a><br />
+   目标：把“文本→tokens→(B,T) batch”这条链路讲透；知道裁剪/填充/利用率的权衡。参考：<code>nanochat/dataloader.py</code>、<code>nanochat/tokenizer.py</code>（conversation render/mask）。</p>
+</li>
+<li>
+<p><a href="chapter7.html">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</a><br />
+   目标：把“训练信号”和“能力信号”分开看；知道何时用 BPB、何时用 CORE/ChatCORE。参考：<code>scripts/base_eval.py</code>、<code>nanochat/core_eval.py</code>、<code>dev/LEADERBOARD.md</code>。</p>
+</li>
+<li>
+<p><a href="chapter8.html">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</a><br />
+   目标：把 SFT 训练数据变成可控的工程系统：格式、mixing、oversample、数据质量。参考：<code>scripts/chat_sft.py</code>、<code>tasks/</code>、<code>dev/gen_synthetic_data.py</code>、<code>tasks/customjson.py</code>。</p>
+</li>
+<li>
+<p><a href="chapter9.html">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</a><br />
+   目标：理解 nanochat 的 RL 版本（类 GRPO/REINFORCE）到底做了什么、没做什么，以及它依赖的数据/评估约定。参考：<code>scripts/chat_rl.py</code>、<code>tasks/gsm8k.py</code>、<code>nanochat/engine.py</code>。</p>
+</li>
+<li>
+<p><a href="chapter10.html">第 10 章：推理与交互（Engine/KV cache、工具调用、CLI/Web UI）</a><br />
+   目标：把“能训”变成“能聊”；理解推理缓存、批量采样与工具 token 的状态机。参考：<code>nanochat/engine.py</code>、<code>scripts/chat_cli.py</code>、<code>scripts/chat_web.py</code>、<code>nanochat/ui.html</code>。</p>
+</li>
+<li>
+<p><a href="chapter11.html">第 11 章：实验体系（miniseries/scaling laws：算力预算、结果记录与分析）</a><br />
+   目标：把实验做成“可比较的数据集”；理解 sweep 脚本如何组织实验与提取指标。参考：<code>runs/miniseries.sh</code>、<code>runs/scaling_laws.sh</code>、<code>dev/scaling_analysis.ipynb</code>。</p>
+</li>
+<li>
+<p><a href="chapter12.html">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</a><br />
+   目标：把常见问题收敛成 checklist：OOM、慢、发散、指标抖、数据坏、恢复难。参考：贯穿全仓库（重点：<code>scripts/*</code>、<code>nanochat/dataloader.py</code>、<code>nanochat/flash_attention.py</code>、<code>nanochat/fp8.py</code>）。</p>
+</li>
+</ol>
+<h2 id="rule-of-thumb">全书通用的 rule-of-thumb（先记住这几条）</h2>
+<ul>
+<li>以 <code>runs/speedrun.sh</code> 作为“端到端正确性”的基线；任何局部优化都要回到这条链路验证。</li>
+<li>先用小深度（例如 <code>d12</code>）把数据/训练/评估跑顺，再上 <code>d24/d26</code> 追能力与速度。</li>
+<li>OOM/不稳时，优先动 <strong>每卡 batch</strong>（<code>--device-batch-size</code>），再动 <strong>总 batch</strong>（<code>--total-batch-size</code>），最后才动模型与序列长度。</li>
+<li>数据准备的第一性：<strong>格式一致、可复现的 shuffle、可解释的 packing/mask</strong>；否则训练细节再漂亮也会被数据噪声淹没。</li>
+</ul>
+<hr />
+<p>高质量生成 chapter1.md。尽量详细。</p>
+            </article>
+            
+            <nav class="page-nav"><a href=".claude/skills/read-arxiv-paper/SKILL.html" class="nav-link prev">← Untitled</a></nav>
+        </main>
+    </div>
+</body>
+</html>

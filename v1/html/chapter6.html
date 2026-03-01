@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/highlight.css">
+    <script src="assets/script.js" defer></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$']],
+                displayMath: [['$$', '$$']],
+                processEscapes: false,
+                packages: {'[+]': ['noerrors', 'ams']}
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            loader: {
+                load: ['[tex]/noerrors', '[tex]/ams']
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>目录</h3>
+                <button id="sidebar-toggle" class="sidebar-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="sidebar-search">
+                <input type="text" id="sidebar-search-input" placeholder="搜索..." autocomplete="off">
+            </div>
+            <div id="tree-container">
+                <nav class="tree-nav" role="tree">
+                    <div class="tree-item " >
+                        <a href="index.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter1.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 1 章：nanochat 是什么，以及它的“最小全流程”</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter2.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 2 章：环境与可复现（单机多卡、缓存目录、依赖、报告）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter3.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 3 章：预训练数据（FineWeb-Edu shards：下载、切分、shuffle、parquet 约定）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter4.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 4 章：Tokenizer（GPT-4 风格 BPE、特殊 token、压缩率与 BPB）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter5.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item active" >
+                        <a href="chapter6.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter7.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter8.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 8 章：SFT 数据准备（对话格式、mask、任务混合、identity 合成）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter9.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 9 章：RL（GSM8K 上的采样、reward、优势归一化与稳定性）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter10.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 10 章：推理与交互（Engine/KV Cache、工具调用、CLI/Web UI）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter11.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 11 章：实验体系（miniseries与scaling laws）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="chapter12.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">第 12 章：排障与最佳实践（数据质量×吞吐×数值稳定的交叉坑位）</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="CLAUDE.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="README.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " >
+                        <a href="template.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">nanochat：面向模型训练与数据准备人员的中文手册</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">.claude</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="1" style="padding-left: 20px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">skills</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-folder " data-level="2" style="padding-left: 40px;">
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">read-arxiv-paper</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 60px;">
+                        <a href=".claude/skills/read-arxiv-paper/SKILL.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Untitled</span>
+                        </a>
+                    </div>
+                </div></div></div></div></div></div>
+                    <div class="tree-folder " data-level="0" >
+                        <div class="tree-folder-header">
+                            <span class="tree-arrow">▶</span>
+                            <span class="tree-icon"></span>
+                            <span class="tree-title">dev</span>
+                        </div>
+                        <div class="tree-folder-content">
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LEADERBOARD.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Leaderboard</span>
+                        </a>
+                    </div>
+                
+                    <div class="tree-item " style="padding-left: 20px;">
+                        <a href="dev/LOG.html" class="tree-link">
+                            <span class="tree-icon">📄</span>
+                            <span class="tree-title">Experiment Log</span>
+                        </a>
+                    </div>
+                </div></div></nav>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <article>
+                <h1 id="6-ddp-bos-best-fit-packing">第 6 章：喂数这件事（DDP 分片、BOS 对齐、best-fit packing、恢复训练）</h1>
+<p>在大型语言模型（LLM）的训练工程中，GPU 集群就像是一座座高速运转、极其昂贵的“算力熔炉”，而数据加载器（DataLoader）则是负责往这些熔炉里源源不断输送燃料的“传送带”。如果传送带跑得慢，GPU 就会因为等待数据而空转，表现为模型算力利用率（MFU，Model FLOPs Utilization）的断崖式下跌；如果传送带送进去的燃料肥瘦不均、混入了杂质，或者顺序错乱，模型就会学到错误的概率分布，表现为损失函数（Loss）发散、评估指标异常，甚至引发灾难性遗忘。</p>
+<p>本章我们将深入探讨 nanochat 中从“原始文本”到“张量批次”的流转全过程。这不仅仅是调用几个数据处理函数那么简单，它涉及到分布式系统中的数据分片（Sharding）、为了榨干每一滴算力而设计的序列打包（Packing）算法，以及在漫长且充满不确定性的预训练过程中，如何实现比特级（Bit-level）严格对齐的断点续训（Resuming）。</p>
+<hr />
+<h2 id="61-token">6.1 文本到 Token 的流转与边界对齐</h2>
+<p>预训练数据通常以海量文档（Document）的形式存在（例如网页抓取文本、书籍、代码库等），而基于 Transformer 架构的 GPT 模型，其底层输入必须是固定长度 $T$ 的离散整数序列（Token IDs）。在这个从非结构化文本到结构化张量的转换过程中，最关键的工程与算法决策之一，就是如何处理文档的物理与语义边界。</p>
+<p>在 nanochat 的数据流水线中，我们强制确立了一条不可逾越的规则：<strong>在每篇独立文档的开头，必须显式地添加一个特殊的起始符号（BOS，Beginning of Sequence）；在文档的结尾，必须添加终止符号（EOS，End of Sequence）</strong>。</p>
+<p>为了理解这一规则的必要性，我们需要回到自回归语言模型（Autoregressive Language Model）的第一性原理。GPT 模型的训练目标是最大化序列的联合概率分布，根据链式法则，它可以被分解为一系列条件概率的乘积：</p>
+<p>$$ P(x_1, x_2, \dots, x_n) = \prod_{i=1}^{n} P(x_i \mid x_1, x_2, \dots, x_{i-1}) $$
+在这个公式中，$x_i$ 代表当前要预测的 Token，而 $x_1, \dots, x_{i-1}$ 是它的上下文（Context）。</p>
+<p>假设我们有两篇完全无关的文档：文档 A 是一篇关于“量子力学”的论文，文档 B 是一篇关于“红烧肉做法”的菜谱。如果我们在数据预处理时，简单粗暴地将它们拼接在一起送入模型，那么当模型试图预测文档 B 的第一个词（比如“猪肉”）时，它的条件概率计算公式会变成：
+$$ P(\text{“猪肉”} \mid \text{“...量子纠缠态的坍缩”}) $$
+这在数学和逻辑上都是极其荒谬的。文档 B 的内容在统计上完全独立于文档 A。如果强迫模型去拟合这种虚假的条件概率，模型就会在内部的注意力矩阵（Attention Matrix）中建立起错误的跨文档关联，最终导致模型在生成文本时产生严重的“幻觉”（Hallucination）——比如在回答物理问题时突然开始颠勺。</p>
+<p>引入 BOS 符号完美解决了这个问题。BOS 作为一个全局特殊的 Token，其对应的嵌入向量（Embedding）在训练过程中会学习到一个强烈的语义信号：“这里是一篇全新文章的绝对起点，请清空或重置之前所有的上下文依赖”。加入 BOS 后，文档 B 第一个词的条件概率变为了：
+$$ P(\text{“猪肉”} \mid \text{“...量子纠缠态的坍缩”}, \text{BOS}) \approx P(\text{“猪肉”} \mid \text{BOS}) $$
+由于注意力机制能够学习到对 BOS 符号的强烈关注，模型学会了在遇到 BOS 时截断对更早历史信息的依赖，从而保证了各个文档在语义空间中的独立性。</p>
+<p><strong>Rule-of-thumb（经验法则）</strong>：
+在准备任何预训练或微调（SFT）数据时，永远不要假设模型能“自动”识别文章的开头。显式地注入 <code>&lt;|endoftext|&gt;</code> 或 <code>&lt;|im_start|&gt;</code> 等边界 Token，是保证数据质量的第一道防线。在排查 Loss 居高不下或生成内容逻辑跳跃的问题时，首先检查你的 DataLoader 是否正确插入了 BOS。</p>
+<hr />
+<h2 id="62-packing">6.2 序列打包（Packing）与利用率的权衡</h2>
+<p>解决了边界语义问题后，我们面临着一个严峻的工程挑战：真实世界中的文档长度呈现出极端的长尾分布（Long-tail Distribution）。有的推文只有几十个 Token，而有的技术文档长达数万个 Token。然而，现代 GPU 上的矩阵乘法引擎（如 Tensor Cores）极度依赖于形状完全一致的张量批次（Batch）。我们需要将变长的文档塞进形状为 $(B, T)$ 的固定张量中，其中 $B$ 是批次大小（Batch Size），$T$ 是上下文窗口长度（Context Length，例如 4096 或 8192）。</p>
+<p>在业界实践中，处理变长序列通常有两种截然不同的流派：</p>
+<h3 id="truncation-padding">流派一：截断与填充（Truncation &amp; Padding）</h3>
+<p>这是最直观、实现最简单的策略。我们将每篇文档单独放入一个长度为 $T$ 的窗口中。</p>
+<ul>
+<li>如果文档长度 $L &gt; T$，则截断超出的部分。</li>
+<li>如果文档长度 $L &lt; T$，则在末尾使用特殊的 Padding 符号（如 <code>&lt;PAD&gt;</code>）进行填充，直到长度等于 $T$。</li>
+</ul>
+<p>这种方法的致命缺点是<strong>极度的算力与显存浪费</strong>。假设模型的上下文窗口 $T = 4096$，而预训练语料的平均文档长度仅为 1024。这意味着在每个 Batch 中，有约 75% 的 Token 是毫无意义的 Padding 符号。即便我们在计算 Loss 时忽略了这些 Padding 符号，GPU 在执行前向传播（Self-Attention 和 MLP 层）时，依然会为这 75% 的无效数据执行完整的浮点运算（FLOPs），导致极其低下的训练吞吐量。</p>
+<h3 id="concatenation-packing">流派二：拼接与打包（Concatenation &amp; Packing）</h3>
+<p>为了榨干 GPU 的每一滴算力，nanochat 采用了高效的 <strong>Best-fit Packing</strong> 策略。其核心思想是：既然一篇短文档填不满窗口 $T$，那我们就把多篇短文档首尾相连，像拼图一样塞满整个窗口。</p>
+<p>这在计算机科学中本质上是一个经典的一维装箱问题（1D Bin Packing Problem）：给定一组大小不一的物品（文档长度）和若干个容量固定的箱子（长度为 $T$ 的序列），如何用最少的箱子装下所有物品？</p>
+<p>由于精确求解装箱问题是 NP-Hard 的，我们在数据准备阶段采用贪心启发式算法（Greedy Heuristic）。我们在内存中维护一个具有一定容量的缓冲池（Buffer Pool）。当需要构建一个新的长度为 $T$ 的序列时，算法会遍历缓冲池，寻找若干篇总长度最接近 $T$ 的文档组合。</p>
+<p>以下是一个详细的 ASCII 示意图，展示了 Best-fit Packing 的组装过程：</p>
+<div class="codehilite"><pre><span></span><code>[初始状态]
+文档缓冲池 (各文档 Token 长度):
+Doc_A(1200)  Doc_B(2500)  Doc_C(800)  Doc_D(3000)  Doc_E(200)  Doc_F(1500)
+
+目标序列窗口长度 T = 4096
+
+=========================================================================
+[构建序列 1 (Sequence 1)]
+目标：寻找组合使得总和最接近 4096
+选择：Doc_D (3000) + Doc_A (1200) = 4200 (超出, 不可行)
+选择：Doc_D (3000) + Doc_C (800) + Doc_E (200) = 4000 (极佳!)
+剩余空隙：4096 - 4000 = 96 Tokens (用 PAD 填充)
+
+物理张量布局:
++--------------------------------+-------------+-------+---------+
+| [BOS] Doc_D (2999 tokens)      | [BOS] Doc_C | [BOS] | PAD(96) |
+|                                | (799 tokens)| Doc_E |         |
++--------------------------------+-------------+-------+---------+
+0                              3000          3800    4000      4096
+=========================================================================
+
+[构建序列 2 (Sequence 2)]
+缓冲池剩余: Doc_A(1200), Doc_B(2500), Doc_F(1500)
+选择：Doc_B (2500) + Doc_F (1500) = 4000 (极佳!)
+剩余空隙：4096 - 4000 = 96 Tokens (用 PAD 填充)
+
+物理张量布局:
++----------------------------+-------------------------+---------+
+| [BOS] Doc_B (2499 tokens)  | [BOS] Doc_F (1499 toks) | PAD(96) |
++----------------------------+-------------------------+---------+
+0                          2500                      4000      4096
+=========================================================================
+</code></pre></div>
+
+<h3 id="packing">Packing 的阿喀琉斯之踵：跨文档注意力幻觉</h3>
+<p>将多篇文档打包进同一个物理序列中，极大地提高了 MFU，但也引入了一个致命的数学缺陷。</p>
+<p>在标准的 Transformer 自注意力机制中，注意力分数矩阵 $A$ 的计算公式为：
+$$ A = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}} + M_{\text{causal}}\right) $$
+其中 $M_{\text{causal}}$ 是一个下三角掩码矩阵（Lower Triangular Mask），用于保证自回归的因果性（即未来的 Token 不能看过去的 Token）：
+$$
+M_{\text{causal}}[i, j] = 
+\begin{cases} 
+0 &amp; \text{if } i \ge j \\
+-\infty &amp; \text{if } i &lt; j 
+\end{cases}
+$$
+然而，当序列中包含多个独立文档时（例如上面的序列 1 包含了 Doc_D, Doc_C, Doc_E），标准的因果掩码允许 Doc_C 中的 Token 去关注 Doc_D 中的 Token！这就回到了我们在 6.1 节讨论的灾难：模型会产生跨文档的注意力幻觉。</p>
+<p>为了解决这个问题，nanochat 在引擎层引入了<strong>文档边界感知注意力掩码（Document-aware Attention Mask）</strong>。在数据流中，除了 Token IDs，我们还会并行传递一个 <code>document_ids</code> 张量，用来标识每个 Token 属于哪个文档。基于这个标识，我们会动态生成一个块对角线（Block-diagonal）的掩码矩阵 $M_{\text{doc}}$：
+$$
+M_{\text{doc}}[i, j] = 
+\begin{cases} 
+0 &amp; \text{if } i \ge j \text{ and } \text{doc_id}[i] == \text{doc_id}[j] \\
+-\infty &amp; \text{otherwise}
+\end{cases}
+$$
+结合因果掩码和文档掩码的最终注意力矩阵结构如下所示（ASCII 示意）：</p>
+<div class="codehilite"><pre><span></span><code>注意力分数矩阵 (行: Query Token, 列: Key Token)
+假设序列包含 Doc 1 (长度3) 和 Doc 2 (长度2)
+
+      [D1_T1] [D1_T2] [D1_T3] | [D2_T1] [D2_T2]
+[D1_T1]  V       -       -    |   -       -
+[D1_T2]  V       V       -    |   -       -
+[D1_T3]  V       V       V    |   -       -
+------------------------------+----------------
+[D2_T1]  X       X       X    |   V       -
+[D2_T2]  X       X       X    |   V       V
+
+图例:
+ V : 允许注意力 (值为 0)
+
+ - : 因果掩码阻断 (值为 -inf)
+ X : 文档掩码阻断 (值为 -inf) -&gt; 核心！防止 D2 看到 D1
+</code></pre></div>
+
+<p><strong>Rule-of-thumb（经验法则）</strong>：
+如果你启用了 Packing 但发现模型在评估集上的表现极其糟糕，或者在长文本生成时总是胡言乱语，第一步必须检查你的 Attention Mask 是否正确实现了块对角线隔离。在现代 FlashAttention 实现中，这通常通过传递 <code>cu_seqlens</code>（累积序列长度）数组来实现硬件级别的隔离计算，这比显式构建巨大的掩码矩阵要高效得多。</p>
+<hr />
+<h2 id="63-ddp">6.3 分布式数据并行（DDP）下的数据分片</h2>
+<p>在单机多卡（例如 8x H100）或多机多卡集群中训练时，分布式数据并行（Distributed Data Parallel, DDP）是标配。DDP 的核心逻辑是：模型权重在所有 GPU 上保持完全一致的副本，但在每一次前向传播时，每张 GPU 处理的是全局数据集中<strong>互不重叠</strong>的一个子集（Sub-batch）。计算完局部梯度后，所有 GPU 通过 All-Reduce 通信原语同步梯度，然后统一更新权重。</p>
+<p>这就对 DataLoader 提出了极为严苛的要求：<strong>必须保证在任何一个训练步（Step），集群中的所有 GPU 吃到的数据绝对不重叠，且在整个训练周期（Epoch）内，全局数据集被完整、均匀地遍历一次。</strong></p>
+<p>在 nanochat 中，我们采用基于全局步长（Global Stride）和局部偏移量（Local Offset）的确定性数据分片（Deterministic Data Sharding）机制。</p>
+<p>让我们定义以下核心变量：</p>
+<ul>
+<li>$W$ (World Size)：集群中参与训练的总 GPU 数量。</li>
+<li>$R$ (Rank)：当前 GPU 的全局唯一编号，取值范围 $0 \le R &lt; W$。</li>
+<li>$B_{\text{local}}$：单张 GPU 在一次前向传播中处理的物理批次大小（Device Batch Size）。</li>
+<li>$G$ (Gradient Accumulation Steps)：梯度累加步数。</li>
+<li>$T$：上下文序列长度。</li>
+<li>$S$：当前的全局训练步数（Global Step）。</li>
+</ul>
+<p>首先，我们需要明确<strong>全局批次大小（Global Batch Size, $B_{\text{global}}$）</strong>的概念。它是模型在一次权重更新（Optimizer Step）中实际看过的总样本数：
+$$ B_{\text{global}} = W \times B_{\text{local}} \times G $$
+这意味着，在一次完整的全局更新步中，整个集群消耗的总 Token 数量为：
+$$ \text{Tokens per Global Step} = B_{\text{global}} \times T $$
+为了实现无重叠的数据喂入，我们将全局打乱后的数据集视为一个无限长的 Token 一维流（1D Token Stream）。对于特定的 GPU（Rank $R$），在特定的微步（Micro-step，即不考虑梯度累加的物理前向传播次数 $s$），它需要读取的数据起始 Token 索引 $I(s, R)$ 的计算公式为：
+$$ I(s, R) = \underbrace{(s \times W \times B_{\text{local}} \times T)}_{\text{跳过之前所有微步消耗的数据}} + \underbrace{(R \times B_{\text{local}} \times T)}_{\text{当前微步内，本卡的相对偏移量}} $$
+这种交错读取（Interleaved Reading）方式确保了集群层面的数据一致性。以下是一个简化的 ASCII 示意图：</p>
+<div class="codehilite"><pre><span></span><code>全局数据流 (Tokens): [T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, ...]
+
+假设配置: World Size (W) = 2, Local Batch Size (B_local) = 1, Seq Len (T) = 2
+(为了简化，假设 Gradient Accumulation = 1，所以 Micro-step = Global Step)
+
+[Step 0]
+  Rank 0 计算起始索引: (0 * 2 * 1 * 2) + (0 * 1 * 2) = 0
+  Rank 0 读取数据: [T0, T1]
+
+  Rank 1 计算起始索引: (0 * 2 * 1 * 2) + (1 * 1 * 2) = 2
+  Rank 1 读取数据: [T2, T3]
+
+[Step 1]
+  Rank 0 计算起始索引: (1 * 2 * 1 * 2) + (0 * 1 * 2) = 4
+  Rank 0 读取数据: [T4, T5]
+
+  Rank 1 计算起始索引: (1 * 2 * 1 * 2) + (1 * 1 * 2) = 6
+  Rank 1 读取数据: [T6, T7]
+</code></pre></div>
+
+<p><strong>Rule-of-thumb（经验法则）</strong>：
+在进行 Scaling Laws 实验或调整硬件配置时，无论你如何改变 GPU 数量 $W$、单卡批次 $B_{\text{local}}$ 还是梯度累加步数 $G$，<strong>必须始终保持全局批次大小 $B_{\text{global}}$ 不变</strong>。只有 $B_{\text{global}}$ 恒定，模型的收敛轨迹和超参数（如学习率、Weight Decay）才具有数学上的可比较性。在 nanochat 的启动脚本中，优先配置 <code>--total-batch-size</code>（即 $B_{\text{global}}$），引擎会自动反推并校验 $G$ 的合法性。</p>
+<hr />
+<h2 id="64-resuming">6.4 训练状态与断点恢复（Resuming）</h2>
+<p>预训练一个哪怕只有 1B 参数的微型语言模型，也可能需要数天到数周的时间。在这个漫长的周期中，硬件故障（GPU 掉卡、ECC 错误）、网络波动（NCCL Timeout）或者被更高优先级的任务抢占，导致训练进程意外中断，是不可避免的家常便饭。</p>
+<p>因此，一个工业级的训练框架必须支持<strong>比特级精确的断点续训（Exact Bit-level Resuming）</strong>。这意味着：如果我们在第 1000 步中断了训练，然后从第 1000 步的 Checkpoint 恢复，并继续训练到第 2000 步；其最终产出的模型权重，必须与一口气从第 0 步跑到第 2000 步产出的模型权重，在浮点数精度上完全一致（误差为 0）。</p>
+<p>要实现这一点，仅仅保存模型的权重（Weights）和优化器的动量（Optimizer States）是远远不够的。<strong>DataLoader 本身必须是一个状态机（State Machine），并且它的内部状态必须被持久化到 Checkpoint 中。</strong></p>
+<p>如果 DataLoader 的状态没有被正确保存和恢复，会发生什么灾难？</p>
+<ol>
+<li><strong>数据重放（Data Replay）</strong>：如果恢复时 DataLoader 从 Epoch 0 重新开始读取，模型会再次看到已经训练过的数据。这会导致灾难性过拟合（Catastrophic Overfitting），Loss 曲线会突然出现不自然的断崖式下降，但模型在验证集上的泛化能力会瞬间崩溃。</li>
+<li><strong>数据跳跃（Data Skipping）</strong>：如果恢复时采用模糊的跳过策略（比如随机跳过前 N 个样本），会破坏全局 Shuffle 的一致性，导致某些数据永远不被模型看到。</li>
+</ol>
+<p>在 nanochat 中，DataLoader 的 <code>state_dict</code> 包含了以下极其关键的元数据：</p>
+<ol>
+<li><strong>全局 Token 消费指针（Global Token Pointer）</strong>：记录了整个集群在中断前已经消费的总 Token 数量（或底层内存映射文件 mmap 的精确字节偏移量）。恢复时，所有 Rank 的 DataLoader 会直接 <code>seek()</code> 到这个偏移量。</li>
+<li><strong>伪随机数生成器状态（PRNG State）</strong>：如果数据是在线洗牌（Online Shuffle）的，必须保存 Python <code>random</code>、NumPy <code>np.random</code> 以及 PyTorch <code>torch.random</code> 的内部状态张量。这确保了恢复训练后，接下来的随机数序列与未中断时完全一致，从而保证 Shuffle 顺序的绝对确定性。</li>
+<li><strong>缓冲池残留（Buffer Residue）</strong>：如果你使用了 6.2 节提到的 Best-fit Packing，缓冲池中通常会残留一些尚未打包完成的文档片段。这些片段的内容和顺序也必须被序列化保存，否则恢复后的第一个 Batch 的 Packing 结果会发生偏移。
+$$ \text{Checkpoint} = \{ \Theta_{\text{model}}, \Omega_{\text{optimizer}}, S_{\text{dataloader}}, S_{\text{rng}}, \text{Step} \} $$</li>
+</ol>
+<p>当系统从 Checkpoint 唤醒时，nanochat 的引擎会严格按照上述状态重建数据流。它会静默地“快进”过已经训练的批次，恢复随机种子，重构 Packing 缓冲池，然后才允许第一批张量流入 GPU。</p>
+<p><strong>Rule-of-thumb（经验法则）</strong>：
+在正式启动耗资巨大的预训练任务之前，<strong>必须进行一次完整的断点续训演练</strong>。具体做法：先从 Step 0 训练到 Step 100，记录 Step 100 的 Loss 值；然后从 Step 50 的 Checkpoint 恢复训练，跑到 Step 100。对比两次在 Step 100 打印的 Loss 值。如果它们在小数点后 4 位不一致，说明你的 DataLoader 状态管理存在泄漏，绝对不能上生产线。</p>
+<hr />
+<h2 id="_1">本章小结</h2>
+<ul>
+<li><strong>BOS 对齐的数学意义</strong>：文档边界的起始符号（BOS）不仅是格式要求，更是重置自回归模型条件概率上下文的关键信号，防止跨文档语义污染。</li>
+<li><strong>Best-fit Packing 与 MFU</strong>：通过一维装箱算法将变长文档拼接到固定长度 $T$ 的序列中，能彻底消除 Padding 带来的算力浪费，将有效 MFU 提升至理论极限。</li>
+<li><strong>文档掩码（Document Mask）的不可或缺</strong>：启用了 Packing 就必须配套实现块对角线的注意力掩码，否则模型会产生严重的跨文档注意力幻觉。</li>
+<li><strong>DDP 数据分片的确定性</strong>：利用全局步长和局部偏移量公式，确保多卡训练时数据消费的互斥性与全局遍历的完整性。</li>
+<li><strong>比特级断点恢复（Exact Resume）</strong>：DataLoader 必须作为有状态对象，将其指针、随机数状态和内部缓冲池持久化到 Checkpoint，以避免灾难性的数据重放或遗漏。</li>
+</ul>
+<hr />
+<h2 id="_2">练习题</h2>
+<h3 id="_3">基础题</h3>
+<ol>
+<li><strong>为什么在预训练数据中，每篇新文档的开头通常需要显式插入一个特殊的 BOS 符号？从条件概率的角度解释。</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>自回归语言模型的核心是计算条件概率 $P(x_i \mid x_{&lt;i})$。如果没有 BOS 符号，模型在预测新文档的第一个词时，会将其条件概率建立在上一篇毫无关联的文档末尾内容之上。这在数学上迫使模型学习虚假的统计相关性。BOS 符号充当了强烈的上下文重置信号，让模型学会截断历史依赖，保证文档间的独立性。
+</details>
+<br></p>
+<ol start="2">
+<li><strong>假设你的集群配置如下：单卡局部批次大小（Local Batch Size）为 4，序列长度（Sequence Length）为 2048，使用了 8 张 GPU 进行 DDP 训练，梯度累加步数（Gradient Accumulation）为 2。请计算全局批次（Global Batch）包含的总 Token 数。</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>全局批次包含的总 Token 数计算公式为：$W \times B_{\text{local}} \times G \times T$。
+代入数值：$8 \text{ (GPUs)} \times 4 \text{ (Local Batch)} \times 2 \text{ (Grad Acc)} \times 2048 \text{ (Seq Len)} = 131,072$ 个 Tokens。
+模型每更新一次权重，实际上看过了 131,072 个 Token。</p>
+</details>
+<p><br></p>
+<ol start="3">
+<li><strong>在截断与填充（Truncation &amp; Padding）策略中，Padding 符号是否应该参与交叉熵损失函数（Cross-Entropy Loss）的计算？为什么？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>绝对不应该。Padding 符号仅仅是为了将张量在物理内存上对齐到固定形状以满足 GPU 矩阵乘法的要求，它们不包含任何真实的语言学信息。如果让其参与计算，模型会消耗大量的参数容量去学习如何预测无意义的填充符号，且由于 Padding 数量庞大，它会严重拉低整体 Loss 的数值，掩盖模型对真实文本预测能力的真实表现。通常通过将 Padding 的标签设置为 <code>-100</code>（PyTorch 默认的忽略索引）来排除其影响。</p>
+</details>
+<p><br></p>
+<ol start="4">
+<li><strong>简述 Best-fit Packing 策略相比于单纯的 Padding 策略，其最核心的工程收益是什么？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>最核心的收益是大幅提高模型算力利用率（MFU）和显存利用率。通过将多篇短文档组合塞满固定长度的序列，极大地减少了无效的 Padding 符号。这使得 GPU 在单次前向/反向传播中执行的浮点运算（FLOPs）几乎 100% 作用于真实的有效 Token，从而显著缩短了达到相同训练效果所需的挂钟时间（Wall-clock time）。</p>
+</details>
+<p><br></p>
+<h3 id="_4">挑战题</h3>
+<ol start="5">
+<li><strong>思考题：在使用 Packing 策略拼接多篇文档时，如果不修改 Transformer 的标准因果注意力机制（Causal Attention），会引发什么严重的模型行为异常？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>如果不修改注意力机制，标准的下三角因果掩码会允许序列后半部分的 Token 去关注（Attend to）序列前半部分的所有 Token。在 Packing 场景下，这意味着后一篇文档的词会利用前一篇无关文档的信息来辅助预测。这种“跨文档注意力”会导致模型产生严重的幻觉，破坏其对单一文档内部逻辑和长距离依赖的建模能力。模型在推理时可能会表现出逻辑跳跃或胡言乱语。</p>
+</details>
+<p><br></p>
+<ol start="6">
+<li><strong>假设你在 8 张 GPU 上训练模型，跑到一半时集群崩溃了。现在由于资源紧张，你只有 4 张 GPU 可用。如果你想从之前的 Checkpoint 恢复训练，DataLoader 的分片逻辑和全局批次大小会遇到什么挑战？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>改变 GPU 数量（World Size，从 8 变 4）会直接改变全局批次大小（如果单卡配置不变）以及数据的交错读取跨度（Stride）。如果强行按原逻辑恢复，原先基于 8 卡计算的数据偏移量和随机数消费进度将与 4 卡环境完全不匹配。这会导致部分数据被重复读取，而另一部分数据被永久遗漏。为了保证严格的数学等价性，通常需要调整梯度累加步数（将 4 卡的 Grad Acc 翻倍）以维持相同的全局批次大小，并且 DataLoader 必须具备根据全局 Token 索引进行动态重分片（Resharding）的能力，这在工程实现上极其复杂。</p>
+</details>
+<p><br></p>
+<ol start="7">
+<li><strong>Best-fit Packing 本质上是一个一维装箱问题，这是一个已知的 NP-Hard 问题。在实际的海量数据准备流水线中，我们是如何在可接受的时间复杂度内完成 Packing 的？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>在工程实践中，我们放弃寻找全局最优解。通常采用贪心启发式算法（Greedy Heuristics），例如降序最佳适应算法（First Fit Decreasing），或者维护一个容量有限的滑动窗口/缓冲池。只要在局部缓冲池内找到足够好的文档组合，使得拼接后的长度接近目标窗口 $T$ 即可。剩余的极小空隙（通常只有几十个 Token）直接用 Padding 填补。这种做法将时间复杂度降低到了线性或对数线性级别，在计算开销和打包效率（通常能达到 99% 以上的填充率）之间取得了极佳的平衡。</p>
+</details>
+<p><br></p>
+<ol start="8">
+<li><strong>如果预训练语料中存在一篇长度为 15000 的超长文档，而模型的上下文窗口配置为 $T=4096$，在数据加载阶段，系统应该如何处理这篇文档？这种处理方式会带来什么理论上的副作用？</strong></li>
+</ol>
+<details>
+<summary>点击查看答案</summary>
+<p>由于文档长度远超物理窗口限制，无法将其放入单个张量中。常规做法是将其强制切分（Chunking）为多个连续的子片段。例如切分为三个 4096 的片段和一个 2712 的片段。前三个片段各自填满一个窗口，最后一个片段可以参与后续的 Packing。
+理论上的副作用是：切分点会硬性截断长距离依赖（Long-range Dependency）信息。模型在处理第二个片段的开头时，无法通过注意力机制“看到”第一个片段的内容，导致上下文信息的断裂。但在固定 $T$ 的架构限制下，这是不可避免的工程妥协。</p>
+</details>
+<hr />
+<h2 id="gotchas">常见陷阱与错误 (Gotchas)</h2>
+<p>在实现和调试 DataLoader 时，以下是研究员和工程师们最常踩的“深坑”。这些错误往往不会导致程序崩溃报错（Silent Failures），而是表现为模型不收敛或性能低下，极难排查。</p>
+<ol>
+<li>
+<p><strong>DDP 数据重复消费（The Identical Batch Nightmare）</strong>
+   - <strong>现象</strong>：多卡训练时，吞吐量看似非常高，Loss 下降极其迅速，甚至很快逼近 0。但在独立的验证集上评估时，指标一塌糊涂，模型完全没有泛化能力。
+   - <strong>原因</strong>：在初始化 DataLoader 时，如果没有正确利用 <code>Rank</code>（当前 GPU 编号）来设置数据读取的偏移量，或者所有卡使用了完全相同的随机数种子且没有做分片步长控制，会导致集群中的所有 GPU 在同一个 Step 里拉取了完全相同的数据。你的 8 卡集群实际上变成了 1 卡在做无用功。
+   - <strong>排查</strong>：在训练的第一个 Step，强制打印出所有 Rank 读取的输入张量（Input IDs）的前 10 个 Token。如果它们完全一样，立刻停止训练并检查分片逻辑。</p>
+</li>
+<li>
+<p><strong>Padding 掩码未对齐（The Zero-Loss Illusion）</strong>
+   - <strong>现象</strong>：在使用截断与填充策略时，模型训练初期的 Loss 值异常地低（例如直接从 2.0 开始，而不是正常的 10.0 左右）。
+   - <strong>原因</strong>：在计算交叉熵损失（Cross-Entropy Loss）时，忘记将 Padding Token 对应的标签（Label）设置为忽略索引（PyTorch 中通常是 <code>-100</code>）。模型发现预测 Padding 符号极其容易（因为它们总是出现在序列末尾），于是疯狂优化对 Padding 的预测概率，导致整体平均 Loss 被严重拉低，掩盖了模型对真实文本预测能力的崩溃。
+   - <strong>排查</strong>：检查计算 Loss 的代码逻辑，确保 <code>labels[input_ids == pad_token_id] = -100</code>。</p>
+</li>
+<li>
+<p><strong>恢复训练时的数据重放（Catastrophic Overfitting on Resume）</strong>
+   - <strong>现象</strong>：从 Checkpoint 恢复训练后，Loss 曲线突然出现一个不自然的陡峭下降，随后在接下来的几千步内，验证集 Loss 开始反弹（过拟合现象）。
+   - <strong>原因</strong>：Checkpoint 中没有妥善保存数据流的精确字节偏移量或全局 Token 索引。导致 DataLoader 重新初始化后，从 Epoch 0 的开头重新读取数据。模型被迫再次学习它已经完全掌握的早期数据，破坏了原有的权重分布。
+   - <strong>排查</strong>：严格执行 6.4 节提到的“断点续训演练”。验证恢复前后的 Loss 值是否达到浮点级别的严格一致。</p>
+</li>
+<li>
+<p><strong>Packing 导致的“虚假” OOM（Out of Memory Illusion）</strong>
+   - <strong>现象</strong>：原本使用 Padding 策略时训练正常，一开启 Best-fit Packing，程序立刻在第一次前向传播时报 CUDA OOM 错误。
+   - <strong>原因</strong>：这并不是因为总 Token 数量变了（形状依然是 $B \times T$），而是因为 Packing 使得张量中的有效 Token 密度达到了近乎 100%。如果你的底层实现（例如某些融合算子或稀疏注意力机制）对 Padding 做了计算和显存优化（比如早停或跳过分配），全满的有效张量会暴露出模型真实的、最坏情况下的显存峰值需求。
+   - <strong>排查</strong>：参考全书的 Rule-of-thumb，开启 Packing 后，如果遇到 OOM，优先降低单卡物理批次大小（<code>--device-batch-size</code>），并通过增加梯度累加步数来维持全局批次大小不变。</p>
+</li>
+<li>
+<p><strong>CPU 成为数据喂入瓶颈（Dataloader Starvation）</strong>
+   - <strong>现象</strong>：GPU 利用率（<code>nvidia-smi</code> 中的 Volatile GPU-Util）呈现锯齿状波动，时而 100%，时而 0%。训练速度远低于理论计算值。
+   - <strong>原因</strong>：在 Python 端实时进行复杂的 Tokenization、长文本切分和 Best-fit Packing 消耗了大量的 CPU 资源。当 CPU 处理速度跟不上 GPU 的消耗速度时，GPU 就会被迫停机等待数据。
+   - <strong>排查</strong>：将 Tokenization 和 Packing 过程前置（Pre-tokenization &amp; Pre-packing）。在正式训练前，通过离线的数据准备脚本，将原始文本预先处理成固定长度为 $T$ 的 NumPy 数组或 Memmap 文件。训练时的 DataLoader 只需执行极其廉价的磁盘顺序读取和切片操作。</p>
+</li>
+</ol>
+</details>
+            </article>
+            
+            <nav class="page-nav"><a href="chapter5.html" class="nav-link prev">← 第 5 章：预训练配方（一个旋钮：`depth`，其余自动计算）</a><a href="chapter7.html" class="nav-link next">第 7 章：评估与指标（BPB、CORE、采样；如何读懂 leaderboard） →</a></nav>
+        </main>
+    </div>
+</body>
+</html>
